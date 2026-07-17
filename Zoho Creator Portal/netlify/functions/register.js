@@ -70,6 +70,7 @@ exports.handler = async (event) => {
     });
 
     const fnData = await fnRes.json();
+    console.log('Creator response:', JSON.stringify(fnData));
 
     // Zoho wraps the result: { code: 3000, data: { output: '{"status":"SUCCESS",...}' } }
     let status = 'ERROR';
@@ -80,7 +81,7 @@ exports.handler = async (event) => {
 
     return { statusCode: 200, headers: CORS, body: JSON.stringify({ status }) };
   } catch (err) {
-    console.error('register function error:', err);
+    console.error('register function error:', err.message);
     return { statusCode: 500, headers: CORS, body: JSON.stringify({ status: 'ERROR' }) };
   }
 };
