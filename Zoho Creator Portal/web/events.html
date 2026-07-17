@@ -301,7 +301,7 @@
       return;
     }
 
-    const detailBase = window.location.origin + '/events/detail';  // adjust to your URL structure
+    const detailBase = window.location.origin + '/event-detail.html';
 
     const html = `<div class="event-grid">${filtered.map(ev => {
       const deliveryClass = ev.delivery === 'In-Person' ? 'badge-inperson'
