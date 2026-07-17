@@ -30,28 +30,27 @@ async function getToken() {
   return d.access_token;
 }
 
+async function safeJson(res) {
+  const text = await res.text();
+  if (!text || !text.trim()) {
+    throw new Error(`Empty response from Zoho (HTTP ${res.status}) — check OAuth scopes`);
+  }
+  return JSON.parse(text);
+}
+
 async function crmGet(path, token) {
   const res = await fetch(`${ZOHO_CRM}/crm/v6/${path}`, {
     headers: { Authorization: `Zoho-oauthtoken ${token}` },
   });
-  return res.json();
+  return safeJson(res);
 }
 
 async function crmSearch(module, criteria, token) {
-  const d = await crmGet(`${module}/search?criteria=${encodeURIComponent(criteria)}&per_page=10`, token);
-  return d.data || [];
-}
 
-async function crmCreate(module, record, token) {
-  const res = await fetch(`${ZOHO_CRM}/crm/v6/${module}`, {
-    method:  'POST',
-    headers: {
-      Authorization:  `Zoho-oauthtoken ${token}`,
-      'Content-Type': 'application/json',
     },
     body: JSON.stringify({ data: [record] }),
   });
-  const d = await res.json();
+  const d = await safeJson(res);
   return d.data?.[0];
 }
 
