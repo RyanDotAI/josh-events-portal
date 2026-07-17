@@ -1,0 +1,52 @@
+// FUNCTION: fn_validateSession
+// Called at the top of every protected page to verify the session token in the URL.
+// Returns contact_id and email if valid; valid=false otherwise.
+//
+// Returns a map:
+//   { valid: true,  contact_id: "...", email: "..." }
+//   { valid: false, error: "no_token" | "invalid" | "expired" }
+//
+// Signature: map fn_validateSession(string p_session_token)
+//
+// CONFIGURE: YOUR_APP_LINK_NAME, YOUR_ADMIN_EMAIL
+
+map fn_validateSession(string p_session_token)
+{
+	APP_NAME    = "YOUR_APP_LINK_NAME";
+	ADMIN_EMAIL = "YOUR_ADMIN_EMAIL";
+
+	result = map();
+
+	if(p_session_token == null || p_session_token == "")
+	{
+		result.put("valid", false);
+		result.put("error", "no_token");
+		return result;
+	}
+
+	matches = zoho.creator.getRecords(APP_NAME, "Portal_Sessions",
+		"Token == \"" + p_session_token + "\" && Session_Type == \"session\"",
+		1, 1, ADMIN_EMAIL);
+
+	if(matches == null || matches.size() == 0)
+	{
+		result.put("valid", false);
+		result.put("error", "invalid");
+		return result;
+	}
+
+	sess = matches.get(0);
+	expires_dt = sess.get("Expires_At").toString().toDateTime("dd-MMM-yyyy HH:mm:ss");
+
+	if(zoho.currenttime > expires_dt)
+	{
+		result.put("valid", false);
+		result.put("error", "expired");
+		return result;
+	}
+
+	result.put("valid",      true);
+	result.put("contact_id", sess.get("CRM_Contact_ID").toString());
+	result.put("email",      sess.get("Email").toString());
+	return result;
+}

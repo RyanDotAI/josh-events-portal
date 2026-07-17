@@ -1,0 +1,102 @@
+// FUNCTION: fn_generateMagicLink
+// Looks up the email in CRM Contacts. If found and not terminated, generates a
+// one-time magic link token (30-minute expiry), stores it in Portal_Sessions,
+// and sends the login email.
+//
+// Returns: "SUCCESS" | "NOT_FOUND" | "TERMINATED" | "ERROR"
+//
+// Signature: string fn_generateMagicLink(string p_email)
+//
+// CONFIGURE BEFORE DEPLOYING:
+//   YOUR_APP_LINK_NAME  — Creator app link name (e.g. joshaievents)
+//   YOUR_ADMIN_EMAIL    — Zoho admin email (app owner)
+//   YOUR_PORTAL_BASE_URL — e.g. https://creatorapp.zoho.com/joshai/joshaievents
+
+string fn_generateMagicLink(string p_email)
+{
+	APP_NAME    = "YOUR_APP_LINK_NAME";
+	ADMIN_EMAIL = "YOUR_ADMIN_EMAIL";
+	PORTAL_BASE = "YOUR_PORTAL_BASE_URL";
+
+	// 1. Find contact in CRM
+	crm_results = zoho.crm.searchRecords("Contacts", "(Email:equals:" + p_email + ")");
+
+	if(crm_results == null || crm_results.size() == 0)
+	{
+		return "NOT_FOUND";
+	}
+
+	contact    = crm_results.get(0);
+	contact_id = contact.get("id").toString();
+	org_label  = ifnull(contact.get("Organization_Label"), "").toString();
+
+	// Block terminated contacts
+	if(org_label.contains("Terminated"))
+	{
+		return "TERMINATED";
+	}
+
+	// 2. Generate token: SHA256 of email + current epoch ms (unique per call)
+	raw_token = p_email + "|" + zoho.currenttime.getTime().toString();
+	token     = zoho.encryption.sha256(raw_token).subString(0, 40);
+	expires   = zoho.currenttime.addMinutes(30);
+
+	// 3. Invalidate any previous unused magic link tokens for this email
+	old_sessions = zoho.creator.getRecords(APP_NAME, "Portal_Sessions",
+		"Email == \"" + p_email + "\" && Session_Type == \"magic_link\" && Is_Used == false",
+		1, 50, ADMIN_EMAIL);
+
+	for each old_rec in old_sessions
+	{
+		upd = map();
+		upd.put("Is_Used", true);
+		zoho.creator.updateRecord(APP_NAME, "Portal_Sessions", old_rec.get("ID"), upd, ADMIN_EMAIL);
+	}
+
+	// 4. Store new token
+	session_data = map();
+	session_data.put("Token",          token);
+	session_data.put("Email",          p_email);
+	session_data.put("CRM_Contact_ID", contact_id);
+	session_data.put("Expires_At",     expires);
+	session_data.put("Is_Used",        false);
+	session_data.put("Session_Type",   "magic_link");
+
+	create_result = zoho.creator.createRecord(APP_NAME, "Portal_Sessions", session_data, ADMIN_EMAIL);
+
+	if(create_result == null)
+	{
+		return "ERROR";
+	}
+
+	// 5. Send login email
+	magic_url = PORTAL_BASE + "/#Page:Verify?token=" + token;
+
+	email_html = "<html><body style='font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Arial,sans-serif;margin:0;padding:0;background:#f0f2f5;'>"
+	           + "<div style='max-width:560px;margin:40px auto;'>"
+	           + "<div style='background:#0d1b2a;padding:22px 28px;border-radius:8px 8px 0 0;'>"
+	           + "<span style='color:white;font-size:20px;font-weight:700;letter-spacing:-0.5px;'>Josh.ai Event Portal</span>"
+	           + "</div>"
+	           + "<div style='background:white;padding:32px 28px;border:1px solid #e0e0e0;border-top:none;border-radius:0 0 8px 8px;'>"
+	           + "<h2 style='color:#0d1b2a;margin:0 0 14px;font-size:22px;'>Your login link</h2>"
+	           + "<p style='color:#555;line-height:1.6;margin:0 0 28px;'>Click the button below to access the Josh.ai Event Portal. This link expires in <strong>30 minutes</strong> and can only be used once.</p>"
+	           + "<p style='text-align:center;margin:0 0 28px;'>"
+	           + "<a href='" + magic_url + "' style='background:#0d1b2a;color:white;padding:14px 34px;text-decoration:none;border-radius:6px;font-weight:600;font-size:15px;display:inline-block;'>Access Event Portal</a>"
+	           + "</p>"
+	           + "<p style='color:#999;font-size:12px;line-height:1.6;margin:0;'>If the button doesn't work, copy this link into your browser:<br/>"
+	           + "<span style='color:#0069c0;word-break:break-all;'>" + magic_url + "</span></p>"
+	           + "<hr style='border:none;border-top:1px solid #eee;margin:24px 0;'/>"
+	           + "<p style='color:#bbb;font-size:11px;margin:0;'>If you didn't request this link, no action is needed. It will expire automatically.</p>"
+	           + "</div></div></body></html>";
+
+	sendmail
+	[
+		from     : "events@josh.ai"
+		fromname : "Josh.ai Events"
+		to       : p_email
+		subject  : "Your Josh.ai Event Portal login link"
+		message  : email_html
+	];
+
+	return "SUCCESS";
+}

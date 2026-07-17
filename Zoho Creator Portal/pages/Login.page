@@ -1,0 +1,125 @@
+// ============================================================
+// PAGE: Login
+// Entry point — no session required.
+// Handles three states:
+//   (default)    Show the email form
+//   sent=true    Show "check your email" confirmation
+//   error=...    Show error message
+// ============================================================
+
+
+// ── DELUGE SCRIPT (paste into page Script tab) ───────────────
+
+p_sent  = input.sent;
+p_error = input.error;
+
+// Build status message block
+status_html = "";
+
+if(p_sent == "true")
+{
+	status_html = "<div class='alert alert-success'>"
+	            + "<strong>Check your email.</strong> A login link has been sent. It expires in 30 minutes."
+	            + "</div>";
+}
+else if(p_error == "not_found")
+{
+	status_html = "<div class='alert alert-error'>"
+	            + "<strong>Email not found.</strong> This email address is not in our system. "
+	            + "Contact your Josh.ai rep or email <a href='mailto:events@josh.ai'>events@josh.ai</a> to get access."
+	            + "</div>";
+}
+else if(p_error == "terminated")
+{
+	status_html = "<div class='alert alert-error'>"
+	            + "<strong>Account inactive.</strong> This account is no longer active. "
+	            + "Please contact your Josh.ai rep."
+	            + "</div>";
+}
+else if(p_error == "error")
+{
+	status_html = "<div class='alert alert-error'>"
+	            + "<strong>Something went wrong.</strong> Please try again or contact <a href='mailto:events@josh.ai'>events@josh.ai</a>."
+	            + "</div>";
+}
+
+page_content = status_html;
+
+
+// ── HTML COMPONENT (paste into an HTML Component on the page) ────
+
+/*
+IMPORTANT: This page also needs a Zoho Creator Form component wired to a
+Deluge workflow to handle the email submission. Set it up as follows:
+
+  1. Add a Form component with one field: Email (Single Line / Email)
+  2. On Submit workflow (Deluge):
+
+       submitted_email = input.Email.toLowercase().trim();
+       result = fn_generateMagicLink(submitted_email);
+
+       if(result == "SUCCESS")
+       {
+           zoho.redirect("YOUR_PORTAL_BASE_URL/#Page:Login?sent=true");
+       }
+       else if(result == "NOT_FOUND")
+       {
+           zoho.redirect("YOUR_PORTAL_BASE_URL/#Page:Login?error=not_found");
+       }
+       else if(result == "TERMINATED")
+       {
+           zoho.redirect("YOUR_PORTAL_BASE_URL/#Page:Login?error=terminated");
+       }
+       else
+       {
+           zoho.redirect("YOUR_PORTAL_BASE_URL/#Page:Login?error=error");
+       }
+
+  3. Style the form Submit button text: "Send Login Link"
+
+The HTML component below provides the page chrome. Place it ABOVE the Form component.
+*/
+*/
+
+<!DOCTYPE html>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif; background: #f0f2f5; min-height: 100vh; display: flex; flex-direction: column; }
+.login-wrap { flex: 1; display: flex; align-items: center; justify-content: center; padding: 40px 20px; }
+.login-card { background: white; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.1); width: 100%; max-width: 440px; overflow: hidden; }
+.login-header { background: #0d1b2a; padding: 28px 32px; }
+.login-header .brand { color: white; font-size: 20px; font-weight: 700; letter-spacing: -0.5px; }
+.login-header .tagline { color: rgba(255,255,255,0.6); font-size: 13px; margin-top: 4px; }
+.login-body { padding: 32px; }
+.login-body h2 { color: #0d1b2a; font-size: 20px; margin-bottom: 8px; }
+.login-body p { color: #666; font-size: 14px; line-height: 1.6; margin-bottom: 24px; }
+.alert { padding: 12px 16px; border-radius: 8px; margin-bottom: 20px; font-size: 14px; line-height: 1.5; }
+.alert-success { background: #dcfce7; color: #166534; border-left: 4px solid #22c55e; }
+.alert-error { background: #fee2e2; color: #991b1b; border-left: 4px solid #ef4444; }
+.alert a { color: inherit; font-weight: 600; }
+.login-footer { text-align: center; padding: 0 32px 28px; }
+.login-footer p { color: #9ca3af; font-size: 12px; line-height: 1.6; }
+</style>
+
+<div class="login-wrap">
+  <div class="login-card">
+    <div class="login-header">
+      <div class="brand">Josh.ai Event Portal</div>
+      <div class="tagline">Training, events &amp; certifications</div>
+    </div>
+    <div class="login-body">
+      <h2>Sign in</h2>
+      <p>Enter your email address and we'll send you a secure login link. No password required.</p>
+      {%page_content%}
+      <!-- Zoho Creator Form component goes here -->
+    </div>
+    <div class="login-footer">
+      <p>Access is limited to registered Josh.ai dealers, rep firms, and partners.<br/>
+      Questions? Email <a href="mailto:events@josh.ai" style="color:#0069c0;">events@josh.ai</a></p>
+      <p style="margin-top:14px;padding-top:14px;border-top:1px solid #f0f0f0;">
+        Looking for a public event?
+        <a href="YOUR_PORTAL_BASE_URL/#Page:PublicEvents" style="color:#0069c0;font-weight:600;">Browse without signing in →</a>
+      </p>
+    </div>
+  </div>
+</div>

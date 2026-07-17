@@ -1,0 +1,294 @@
+// ============================================================
+// PAGE: Events
+// Audience-filtered public event listing.
+// URL params: ?audience=Dealer  ?type_filter=Training  ?delivery_filter=Virtual
+// Page variables to declare: audience, type_filter, delivery_filter, page_title, page_content
+//
+// KEY PAGE SCRIPT RULES (learned from debugging):
+//   - Use q = "'" — never embed single quotes inside double-quoted strings ('"  pattern breaks parser)
+//   - Use input.varname directly for declared page variables, not local copies
+//   - No multi-line string concatenation — each line must be a complete statement
+//   - No &&, ||, or ! in if() — use nested ifs and flag variables
+//   - Date string < comparison unsupported — convert to Long via replaceAll("-","").toLong()
+//   - All if() blocks must use { } braces on separate lines (no inline braces)
+// ============================================================
+
+
+// ── DELUGE SCRIPT (paste into page Script tab) ───────────────
+
+sl = "/";
+portal_base = "https:" + sl + sl + "creatorapp.zoho.com/joshai839/josh-ai-event-portal/";
+q = "'";
+audience_param = ifnull(input.audience,"").toString();
+input.type_filter = ifnull(input.type_filter,"").toString();
+input.delivery_filter = ifnull(input.delivery_filter,"").toString();
+crm_criteria = "(Event_Status:equals:Open for Registration)";
+if(audience_param != "")
+{
+    crm_criteria = "((Event_Status:equals:Open for Registration)AND(Audience_Type:equals:" + audience_param + "))";
+}
+all_events = zoho.crm.searchRecords("Event_Master",crm_criteria,1,200);
+today_num = zoho.currentdate.toString("yyyyMMdd").toLong();
+type_options = "";
+seen_types = "";
+for each  ev in all_events
+{
+    et = ifnull(ev.get("Event_Type"),"").toString();
+    if(et != "")
+    {
+        marker = "|" + et + "|";
+        is_new = "yes";
+        if(seen_types.contains(marker))
+        {
+            is_new = "no";
+        }
+        if(is_new == "yes")
+        {
+            seen_types = seen_types + marker;
+            opt = "<option value=" + q + et + q;
+            if(et == input.type_filter)
+            {
+                opt = opt + " selected";
+            }
+            opt = opt + ">" + et + "</option>";
+            type_options = type_options + opt;
+        }
+    }
+}
+opt_ip = "<option value=" + q + "In-Person" + q;
+if(input.delivery_filter == "In-Person")
+{
+    opt_ip = opt_ip + " selected";
+}
+opt_ip = opt_ip + ">In-Person</option>";
+opt_vir = "<option value=" + q + "Virtual" + q;
+if(input.delivery_filter == "Virtual")
+{
+    opt_vir = opt_vir + " selected";
+}
+opt_vir = opt_vir + ">Virtual</option>";
+opt_hyb = "<option value=" + q + "Hybrid" + q;
+if(input.delivery_filter == "Hybrid")
+{
+    opt_hyb = opt_hyb + " selected";
+}
+opt_hyb = opt_hyb + ">Hybrid</option>";
+delivery_opts = opt_ip + opt_vir + opt_hyb;
+filter_html = "<div class=" + q + "filter-bar" + q + ">";
+filter_html = filter_html + "<strong style=" + q + "font-size:14px;color:#333;" + q + ">Filter:</strong>";
+filter_html = filter_html + "<select id=" + q + "type_select" + q + " onchange=" + q + "applyFilters()" + q + ">";
+filter_html = filter_html + "<option value=" + q + q + ">All Event Types</option>";
+filter_html = filter_html + type_options + "</select>";
+filter_html = filter_html + "<select id=" + q + "del_select" + q + " onchange=" + q + "applyFilters()" + q + ">";
+filter_html = filter_html + "<option value=" + q + q + ">All Formats</option>";
+filter_html = filter_html + delivery_opts + "</select>";
+filter_html = filter_html + "</div>";
+cards_html = "";
+visible_count = 0;
+for each  ev in all_events
+{
+    ev_id = ev.get("id").toString();
+    ev_name = ifnull(ev.get("Name"),"").toString();
+    ev_type = ifnull(ev.get("Event_Type"),"").toString();
+    ev_delivery = ifnull(ev.get("Delivery_Type"),"").toString();
+    ev_start = ifnull(ev.get("Start_Time"),"").toString();
+    ev_loc = ifnull(ev.get("Event_Location_Name"),"").toString();
+    ev_city = ifnull(ev.get("Event_Address_City"),"").toString();
+    ev_state = ifnull(ev.get("Event_Address_State_Province"),"").toString();
+    ev_close = ifnull(ev.get("Registration_Close_Date"),"").toString();
+    ev_desc = ifnull(ev.get("Event_Description"),"").toString();
+    skip = "no";
+    if(input.type_filter != "")
+    {
+        if(ev_type != input.type_filter)
+        {
+            skip = "yes";
+        }
+    }
+    if(input.delivery_filter != "")
+    {
+        if(ev_delivery != input.delivery_filter)
+        {
+            skip = "yes";
+        }
+    }
+    if(ev_close != "")
+    {
+        if(ev_close != "null")
+        {
+            ev_close_num = ev_close.replaceAll("-","").toLong();
+            if(ev_close_num < today_num)
+            {
+                skip = "yes";
+            }
+        }
+    }
+    if(skip == "no")
+    {
+        visible_count = visible_count + 1;
+        delivery_class = "badge-virtual";
+        if(ev_delivery == "In-Person")
+        {
+            delivery_class = "badge-inperson";
+        }
+        if(ev_delivery == "Hybrid")
+        {
+            delivery_class = "badge-hybrid";
+        }
+        type_class = "badge-training";
+        if(ev_type.contains("Webinar"))
+        {
+            type_class = "badge-webinar";
+        }
+        if(ev_type.contains("Meeting"))
+        {
+            type_class = "badge-meeting";
+        }
+        if(ev_type.contains("CEU"))
+        {
+            type_class = "badge-ceu";
+        }
+        display_start = "";
+        if(ev_start.length() >= 16)
+        {
+            display_start = ev_start.subString(0,10) + " at " + ev_start.subString(11,16);
+        }
+        loc_line = "";
+        if(ev_delivery == "Virtual")
+        {
+            loc_line = "<div class=" + q + "detail-row" + q + "><span class=" + q + "di" + q + ">&#128187;</span><span>Virtual event</span></div>";
+        }
+        if(ev_delivery != "Virtual")
+        {
+            loc_text = ev_loc;
+            if(ev_city != "")
+            {
+                loc_text = loc_text + " - " + ev_city;
+            }
+            if(ev_state != "")
+            {
+                loc_text = loc_text + ", " + ev_state;
+            }
+            if(loc_text.trim() != "")
+            {
+                loc_line = "<div class=" + q + "detail-row" + q + "><span class=" + q + "di" + q + ">&#128205;</span><span>" + loc_text + "</span></div>";
+            }
+        }
+        close_line = "";
+        if(ev_close != "")
+        {
+            if(ev_close != "null")
+            {
+                close_line = "<div class=" + q + "detail-row" + q + "><span class=" + q + "di" + q + ">&#9200;</span><span>Register by " + ev_close + "</span></div>";
+            }
+        }
+        desc_line = "";
+        if(ev_desc != "")
+        {
+            if(ev_desc != "null")
+            {
+                short_desc = ev_desc;
+                if(short_desc.length() > 160)
+                {
+                    short_desc = short_desc.subString(0,160) + "...";
+                }
+                desc_line = "<p class=" + q + "ev-desc" + q + ">" + short_desc + "</p>";
+            }
+        }
+        audience_qs = "";
+        if(audience_param != "")
+        {
+            audience_qs = "&audience=" + audience_param;
+        }
+        detail_url = portal_base + "#Page:EventDetail?event_id=" + ev_id + audience_qs;
+        card = "<div class=" + q + "event-card" + q + ">";
+        card = card + "<div class=" + q + "ev-badges" + q + ">";
+        card = card + "<span class=" + q + "badge " + type_class + q + ">" + ev_type + "</span>";
+        card = card + "<span class=" + q + "badge " + delivery_class + q + ">" + ev_delivery + "</span>";
+        card = card + "</div>";
+        card = card + "<h3 class=" + q + "ev-title" + q + ">" + ev_name + "</h3>";
+        card = card + desc_line;
+        card = card + "<div class=" + q + "ev-details" + q + ">";
+        card = card + "<div class=" + q + "detail-row" + q + "><span class=" + q + "di" + q + ">&#128197;</span><span>" + display_start + "</span></div>";
+        card = card + loc_line;
+        card = card + close_line;
+        card = card + "</div>";
+        card = card + "<a href=" + q + detail_url + q + " class=" + q + "btn btn-primary" + q + ">View Details and Register</a>";
+        card = card + "</div>";
+        cards_html = cards_html + card;
+    }
+}
+if(visible_count == 0)
+{
+    cards_html = "<div class=" + q + "empty-state" + q + ">";
+    cards_html = cards_html + "<div class=" + q + "empty-icon" + q + ">&#128197;</div>";
+    cards_html = cards_html + "<h3>No upcoming events</h3>";
+    cards_html = cards_html + "<p>Check back soon for new events.</p>";
+    cards_html = cards_html + "</div>";
+}
+audience_label = "";
+if(audience_param != "")
+{
+    audience_label = " for " + audience_param + " Partners";
+}
+input.page_title = "Upcoming Events" + audience_label;
+input.page_content = filter_html + cards_html;
+
+
+// ── HTML SNIPPET ─────────────────────────────────────────────
+
+<%{%>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif; background: #f0f2f5; color: #212121; }
+.portal-header { background: #0d1b2a; color: white; padding: 14px 24px; display: flex; align-items: center; }
+.brand { font-size: 18px; font-weight: 700; letter-spacing: -0.5px; }
+.main { max-width: 1000px; margin: 0 auto; padding: 28px 20px; }
+.page-title { font-size: 24px; font-weight: 700; color: #0d1b2a; margin-bottom: 20px; }
+.filter-bar { background: white; padding: 14px 18px; border-radius: 8px; margin-bottom: 20px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
+.filter-bar strong { font-size: 14px; color: #333; }
+.filter-bar select { padding: 7px 12px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 13px; }
+.event-card { background: white; border-radius: 10px; padding: 22px 24px; margin-bottom: 14px; box-shadow: 0 1px 4px rgba(0,0,0,0.07); border-left: 4px solid #0d1b2a; }
+.ev-badges { margin-bottom: 10px; }
+.badge { display: inline-block; padding: 3px 10px; border-radius: 20px; font-size: 11px; font-weight: 700; margin-right: 6px; text-transform: uppercase; letter-spacing: 0.4px; }
+.badge-training { background: #ede9fe; color: #5b21b6; }
+.badge-webinar  { background: #e0f2fe; color: #0369a1; }
+.badge-meeting  { background: #fce7f3; color: #9d174d; }
+.badge-ceu      { background: #fef9c3; color: #854d0e; }
+.badge-inperson { background: #dbeafe; color: #1e40af; }
+.badge-virtual  { background: #dcfce7; color: #166534; }
+.badge-hybrid   { background: #fff7ed; color: #c2410c; }
+.ev-title { font-size: 17px; font-weight: 700; color: #0d1b2a; margin-bottom: 8px; }
+.ev-desc { font-size: 13px; color: #666; line-height: 1.5; margin-bottom: 12px; }
+.ev-details { margin-bottom: 16px; }
+.detail-row { display: flex; align-items: flex-start; gap: 8px; margin-bottom: 5px; font-size: 13px; color: #555; }
+.di { min-width: 18px; }
+.btn { display: inline-block; padding: 9px 20px; border-radius: 6px; font-size: 13px; font-weight: 600; text-decoration: none; }
+.btn-primary { background: #0d1b2a; color: white; }
+.empty-state { text-align: center; padding: 60px 20px; color: #9ca3af; }
+.empty-icon { font-size: 48px; margin-bottom: 14px; }
+.empty-state h3 { font-size: 18px; font-weight: 600; color: #6b7280; margin-bottom: 8px; }
+</style>
+
+<script>
+function applyFilters() {
+  var type = document.getElementById('type_select') ? document.getElementById('type_select').value : '';
+  var del  = document.getElementById('del_select')  ? document.getElementById('del_select').value  : '';
+  var aud  = '<%=input.audience%>';
+  var hash = '#Page:Events';
+  var params = aud ? 'audience=' + aud : '';
+  if (type) params += (params ? '&' : '') + 'type_filter=' + encodeURIComponent(type);
+  if (del)  params += (params ? '&' : '') + 'delivery_filter=' + encodeURIComponent(del);
+  if (params) hash += '?' + params;
+  window.location.href = window.location.href.split('#')[0] + hash;
+}
+</script>
+
+<header class="portal-header">
+  <span class="brand">Josh.ai Events</span>
+</header>
+<div class="main">
+  <div class="page-title"><%=input.page_title%></div>
+  <%=input.page_content%>
+</div>
+<%}%>

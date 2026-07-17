@@ -1,0 +1,120 @@
+// FUNCTION: fn_getFilteredEvents
+// Fetches all "Open for Registration" events from CRM and filters them by:
+//   1. Audience Type (mapped from the contact's Organization_Label)
+//   2. Target Region (if set on the event, must include the contact's Regional_Team)
+//   3. Rep Firm (if set on the event, only visible to contacts in that firm)
+//   4. Registration Close Date (excludes events past their close date)
+//
+// Returns a list of event maps, sorted by Start_Time ascending.
+// NOTE: Requires "Target_Region" multi-select field on Event_Master (see CRM_Setup.md).
+//
+// Signature: list fn_getFilteredEvents(string p_org_label, string p_regional_team, string p_rep_firm)
+
+list fn_getFilteredEvents(string p_org_label, string p_regional_team, string p_rep_firm)
+{
+	// Get the audience types this contact is eligible for
+	audience_types = fn_getAudienceTypes(p_org_label);
+
+	if(audience_types.size() == 0)
+	{
+		return list();
+	}
+
+	// Fetch all open events from CRM (up to 200 — see CRM_Setup.md note on limits)
+	all_events = zoho.crm.searchRecords("Event_Master", "(Event_Status:equals:Open for Registration)", 1, 200, null, null);
+
+	if(all_events == null)
+	{
+		return list();
+	}
+
+	today_str  = zoho.currentdate.toString("yyyy-MM-dd");
+	filtered   = list();
+
+	for each ev in all_events
+	{
+		// ── Audience check ────────────────────────────────────────────────────
+		ev_audience = ifnull(ev.get("Audience_Type"), "").toString();
+
+		// Never show Internal events to portal users
+		if(ev_audience == "Internal")
+		{
+			continue;
+		}
+
+		if(!audience_types.contains(ev_audience))
+		{
+			continue;
+		}
+
+		// ── Registration close date check ─────────────────────────────────────
+		reg_close = ifnull(ev.get("Registration_Close_Date"), "").toString();
+		if(reg_close != "" && reg_close != "null")
+		{
+			// CRM dates come as "yyyy-MM-dd"
+			if(reg_close < today_str)
+			{
+				continue;
+			}
+		}
+
+		// ── Target region check ───────────────────────────────────────────────
+		// Target_Region is a multi-select; if set, at least one value must match
+		// the contact's Regional_Team. If blank, event is open to all regions.
+		target_region = ifnull(ev.get("Target_Region"), "").toString();
+		if(target_region != "" && target_region != "null")
+		{
+			if(p_regional_team == null || p_regional_team == "")
+			{
+				// Contact has no region — skip regionally restricted events
+				continue;
+			}
+			if(!target_region.contains(p_regional_team))
+			{
+				continue;
+			}
+		}
+
+		// ── Rep firm check ────────────────────────────────────────────────────
+		// If the event is tied to a specific rep firm, only show it to contacts
+		// whose rep firm matches (or who have no rep firm assigned — their dealer
+		// may be under that firm).
+		ev_firm_map  = ev.get("Rep_Firm");
+		ev_firm_name = "";
+		if(ev_firm_map != null)
+		{
+			ev_firm_name = ifnull(ev_firm_map.get("name"), "").toString();
+		}
+
+		if(ev_firm_name != "")
+		{
+			if(p_rep_firm != null && p_rep_firm != "" && ev_firm_name != p_rep_firm)
+			{
+				continue;
+			}
+		}
+
+		// ── Passed all filters — build clean event map ────────────────────────
+		event_map = map();
+		event_map.put("id",                ev.get("id").toString());
+		event_map.put("name",              ifnull(ev.get("Name"), "").toString());
+		event_map.put("description",       ifnull(ev.get("Event_Description"), "").toString());
+		event_map.put("event_type",        ifnull(ev.get("Event_Type"), "").toString());
+		event_map.put("delivery_type",     ifnull(ev.get("Delivery_Type"), "").toString());
+		event_map.put("audience_type",     ev_audience);
+		event_map.put("start_time",        ifnull(ev.get("Start_Time"), "").toString());
+		event_map.put("end_time",          ifnull(ev.get("End_Time"), "").toString());
+		event_map.put("reg_close_date",    reg_close);
+		event_map.put("location_name",     ifnull(ev.get("Event_Location_Name"), "").toString());
+		event_map.put("city",              ifnull(ev.get("Event_Address_City"), "").toString());
+		event_map.put("state",             ifnull(ev.get("Event_Address_State_Province"), "").toString());
+		event_map.put("virtual_link",      ifnull(ev.get("Virtual_Meeting_Link"), "").toString());
+		event_map.put("event_url",         ifnull(ev.get("Event_URL"), "").toString());
+		event_map.put("capacity",          ifnull(ev.get("Capacity"), "").toString());
+		event_map.put("rep_firm",          ev_firm_name);
+
+		filtered.add(event_map);
+	}
+
+	return filtered;
+}

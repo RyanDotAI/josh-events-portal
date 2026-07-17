@@ -1,0 +1,49 @@
+// FUNCTION: fn_cancelRegistration
+// Cancels a specific event registration. Verifies the registration belongs to
+// the requesting contact before allowing cancellation.
+//
+// Returns: "SUCCESS" | "NOT_FOUND" | "NOT_AUTHORIZED" | "ERROR"
+//
+// Signature: string fn_cancelRegistration(string p_contact_id, string p_registration_id)
+
+string fn_cancelRegistration(string p_contact_id, string p_registration_id)
+{
+	if(p_registration_id == null || p_registration_id == "" || p_contact_id == null || p_contact_id == "")
+	{
+		return "ERROR";
+	}
+
+	// Fetch the registration record
+	reg = zoho.crm.getRecordById("Event_Registrations", p_registration_id.toLong());
+
+	if(reg == null)
+	{
+		return "NOT_FOUND";
+	}
+
+	// Verify this registration belongs to the requesting contact
+	reg_contact = reg.get("Contact");
+	if(reg_contact == null)
+	{
+		return "NOT_AUTHORIZED";
+	}
+
+	reg_contact_id = reg_contact.get("id").toString();
+	if(reg_contact_id != p_contact_id)
+	{
+		return "NOT_AUTHORIZED";
+	}
+
+	// Update status to Cancelled
+	upd = map();
+	upd.put("Status", "Cancelled");
+
+	update_result = zoho.crm.updateRecord("Event_Registrations", p_registration_id.toLong(), upd);
+
+	if(update_result == null)
+	{
+		return "ERROR";
+	}
+
+	return "SUCCESS";
+}

@@ -1,0 +1,226 @@
+// ============================================================
+// PAGE: PublicEvents
+// Unauthenticated page — shows all events where Is_Public = true.
+// No session required. Accessible to anyone with the link.
+// In Creator portal settings, mark this page as "Public" (no login required).
+//
+// URL params: ?type_filter=Training&delivery_filter=Virtual
+// ============================================================
+
+
+// ── DELUGE SCRIPT (paste into page Script tab) ───────────────
+
+PORTAL_BASE = "YOUR_PORTAL_BASE_URL";
+
+type_filter     = ifnull(input.type_filter, "").toString();
+delivery_filter = ifnull(input.delivery_filter, "").toString();
+
+// Fetch all public, open-for-registration events from CRM
+all_events = zoho.crm.searchRecords("Event_Master",
+	"((Event_Status:equals:Open for Registration)AND(Is_Public:equals:true))",
+	1, 200, null, null);
+
+today_str = zoho.currentdate.toString("yyyy-MM-dd");
+
+// Build filter options from available events
+all_types = list();
+for each ev in all_events
+{
+	et = ifnull(ev.get("Event_Type"), "").toString();
+	if(et != "" && !all_types.contains(et)) { all_types.add(et); }
+}
+
+type_options = "";
+for each et in all_types
+{
+	selected = "";
+	if(et == type_filter) { selected = " selected"; }
+	type_options = type_options + "<option value='" + et + "'" + selected + ">" + et + "</option>";
+}
+
+delivery_opts = "";
+for each d in list("In-Person", "Virtual", "Hybrid")
+{
+	selected = "";
+	if(d == delivery_filter) { selected = " selected"; }
+	delivery_opts = delivery_opts + "<option value='" + d + "'" + selected + ">" + d + "</option>";
+}
+
+filter_html = "<div class='filter-bar'>"
+            + "<strong style='font-size:14px;color:#333;'>Filter:</strong>"
+            + "<select id='type_select' onchange='applyFilters()'><option value=''>All Event Types</option>" + type_options + "</select>"
+            + "<select id='del_select' onchange='applyFilters()'><option value=''>All Formats</option>" + delivery_opts + "</select>"
+            + "</div>";
+
+// Build event cards
+cards_html    = "";
+visible_count = 0;
+
+for each ev in all_events
+{
+	ev_id       = ev.get("id").toString();
+	ev_name     = ifnull(ev.get("Name"), "").toString();
+	ev_type     = ifnull(ev.get("Event_Type"), "").toString();
+	ev_delivery = ifnull(ev.get("Delivery_Type"), "").toString();
+	ev_start    = ifnull(ev.get("Start_Time"), "").toString();
+	ev_loc      = ifnull(ev.get("Event_Location_Name"), "").toString();
+	ev_city     = ifnull(ev.get("Event_Address_City"), "").toString();
+	ev_state    = ifnull(ev.get("Event_Address_State_Province"), "").toString();
+	ev_close    = ifnull(ev.get("Registration_Close_Date"), "").toString();
+	ev_cap      = ifnull(ev.get("Capacity"), "").toString();
+	ev_desc     = ifnull(ev.get("Event_Description"), "").toString();
+	ev_delivery2 = ifnull(ev.get("Delivery_Type"), "").toString();
+
+	// Apply filters
+	if(type_filter != "" && ev_type != type_filter) { continue; }
+	if(delivery_filter != "" && ev_delivery != delivery_filter) { continue; }
+
+	// Skip past registration close date
+	if(ev_close != "" && ev_close != "null" && ev_close < today_str) { continue; }
+
+	visible_count = visible_count + 1;
+
+	delivery_class = "badge-virtual";
+	delivery_icon  = "💻";
+	if(ev_delivery == "In-Person") { delivery_class = "badge-inperson"; delivery_icon = "📍"; }
+	if(ev_delivery == "Hybrid")    { delivery_class = "badge-hybrid";   delivery_icon = "🔀"; }
+
+	type_class = "badge-training";
+	if(ev_type.contains("Webinar")) { type_class = "badge-webinar"; }
+	if(ev_type.contains("Meeting")) { type_class = "badge-meeting"; }
+	if(ev_type.contains("CEU"))     { type_class = "badge-ceu"; }
+
+	display_start = "";
+	if(ev_start.length() >= 16)
+	{
+		display_start = ev_start.subString(0, 10) + " at " + ev_start.subString(11, 16);
+	}
+
+	loc_line = "";
+	if(ev_delivery == "Virtual")
+	{
+		loc_line = "<div class='detail-row'><span class='di'>💻</span><span>Virtual event</span></div>";
+	}
+	else
+	{
+		loc_text = ev_loc;
+		if(ev_city != "")  { loc_text = loc_text + " · " + ev_city; }
+		if(ev_state != "") { loc_text = loc_text + ", " + ev_state; }
+		if(loc_text.trim() != "") { loc_line = "<div class='detail-row'><span class='di'>📍</span><span>" + loc_text + "</span></div>"; }
+	}
+
+	close_line = "";
+	if(ev_close != "" && ev_close != "null")
+	{
+		close_line = "<div class='detail-row'><span class='di'>⏰</span><span>Register by " + ev_close + "</span></div>";
+	}
+
+	desc_line = "";
+	if(ev_desc != "" && ev_desc != "null")
+	{
+		short_desc = ev_desc;
+		if(short_desc.length() > 160) { short_desc = short_desc.subString(0, 160) + "…"; }
+		desc_line = "<p class='ev-desc'>" + short_desc + "</p>";
+	}
+
+	detail_url = PORTAL_BASE + "/#Page:PublicEventDetail?event_id=" + ev_id;
+
+	cards_html = cards_html
+	           + "<div class='event-card'>"
+	           + "<div class='ev-badges'>"
+	           + "<span class='badge " + type_class + "'>" + ev_type + "</span>"
+	           + "<span class='badge " + delivery_class + "'>" + delivery_icon + " " + ev_delivery + "</span>"
+	           + "</div>"
+	           + "<h3 class='ev-title'>" + ev_name + "</h3>"
+	           + desc_line
+	           + "<div class='ev-details'>"
+	           + "<div class='detail-row'><span class='di'>📅</span><span>" + display_start + "</span></div>"
+	           + loc_line
+	           + close_line
+	           + "</div>"
+	           + "<a href='" + detail_url + "' class='btn btn-primary'>View Details &amp; Register →</a>"
+	           + "</div>";
+}
+
+if(visible_count == 0)
+{
+	cards_html = "<div class='empty-state'>"
+	           + "<div class='empty-icon'>📅</div>"
+	           + "<h3>No public events right now</h3>"
+	           + "<p>Check back soon, or <a href='" + PORTAL_BASE + "/#Page:Login' class='cta-link'>sign in</a> if you're a registered partner.</p>"
+	           + "</div>";
+}
+
+page_content = filter_html + cards_html;
+
+
+// ── HTML COMPONENT ───────────────────────────────────────────
+
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif; background: #f0f2f5; color: #212121; }
+.portal-header { background: #0d1b2a; color: white; padding: 14px 24px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; }
+.brand { font-size: 18px; font-weight: 700; letter-spacing: -0.5px; }
+.header-links { display: flex; gap: 12px; }
+.header-links a { color: rgba(255,255,255,0.75); text-decoration: none; font-size: 13px; padding: 6px 14px; border-radius: 20px; border: 1px solid rgba(255,255,255,0.25); }
+.header-links a:hover { background: rgba(255,255,255,0.1); color: white; }
+.header-links a.signin { background: white; color: #0d1b2a; border-color: white; font-weight: 600; }
+.main { max-width: 1000px; margin: 0 auto; padding: 28px 20px; }
+.page-title { font-size: 24px; font-weight: 700; color: #0d1b2a; margin-bottom: 6px; }
+.page-sub { font-size: 14px; color: #666; margin-bottom: 20px; }
+.filter-bar { background: white; padding: 14px 18px; border-radius: 8px; margin-bottom: 20px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
+.filter-bar select { padding: 7px 12px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 13px; }
+.event-card { background: white; border-radius: 10px; padding: 22px 24px; margin-bottom: 14px; box-shadow: 0 1px 4px rgba(0,0,0,0.07); border-left: 4px solid #0d1b2a; }
+.ev-badges { margin-bottom: 10px; }
+.badge { display: inline-block; padding: 3px 10px; border-radius: 20px; font-size: 11px; font-weight: 700; margin-right: 6px; text-transform: uppercase; letter-spacing: 0.4px; }
+.badge-training { background: #ede9fe; color: #5b21b6; }
+.badge-webinar { background: #e0f2fe; color: #0369a1; }
+.badge-meeting { background: #fce7f3; color: #9d174d; }
+.badge-ceu { background: #fef9c3; color: #854d0e; }
+.badge-inperson { background: #dbeafe; color: #1e40af; }
+.badge-virtual { background: #dcfce7; color: #166534; }
+.badge-hybrid { background: #fff7ed; color: #c2410c; }
+.ev-title { font-size: 17px; font-weight: 700; color: #0d1b2a; margin-bottom: 8px; }
+.ev-desc { font-size: 13px; color: #666; line-height: 1.5; margin-bottom: 12px; }
+.ev-details { margin-bottom: 16px; }
+.detail-row { display: flex; align-items: flex-start; gap: 8px; margin-bottom: 5px; font-size: 13px; color: #555; }
+.di { min-width: 18px; }
+.btn { display: inline-block; padding: 9px 20px; border-radius: 6px; font-size: 13px; font-weight: 600; text-decoration: none; }
+.btn-primary { background: #0d1b2a; color: white; }
+.btn-primary:hover { background: #1a3050; }
+.empty-state { text-align: center; padding: 60px 20px; color: #9ca3af; }
+.empty-icon { font-size: 48px; margin-bottom: 14px; }
+.empty-state h3 { font-size: 18px; font-weight: 600; color: #6b7280; margin-bottom: 8px; }
+.empty-state p { font-size: 14px; }
+.cta-link { color: #0069c0; text-decoration: none; font-weight: 600; }
+.partner-banner { background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 8px; padding: 14px 18px; margin-bottom: 20px; font-size: 14px; color: #1e40af; }
+.partner-banner a { color: #1e40af; font-weight: 700; }
+</style>
+
+<script>
+function applyFilters() {
+  var type = document.getElementById('type_select') ? document.getElementById('type_select').value : '';
+  var del  = document.getElementById('del_select')  ? document.getElementById('del_select').value  : '';
+  var base = window.location.href.split('#')[0];
+  var params = '';
+  if (type) params += (params ? '&' : '?') + 'type_filter=' + encodeURIComponent(type);
+  if (del)  params += (params ? '&' : '?') + 'delivery_filter=' + encodeURIComponent(del);
+  window.location.href = base + '#Page:PublicEvents' + params;
+}
+</script>
+
+<header class="portal-header">
+  <span class="brand">Josh.ai Events</span>
+  <div class="header-links">
+    <a href="YOUR_PORTAL_BASE_URL/#Page:Login" class="signin">Partner Sign In</a>
+  </div>
+</header>
+
+<div class="main">
+  <div class="page-title">Upcoming Events</div>
+  <div class="page-sub">Open to everyone — no account required to register</div>
+  <div class="partner-banner">
+    🔐 Are you a Josh.ai dealer, rep, or partner? <a href="YOUR_PORTAL_BASE_URL/#Page:Login">Sign in</a> to see your full personalized event listing.
+  </div>
+  {%page_content%}
+</div>

@@ -1,0 +1,215 @@
+// ============================================================
+// PAGE: MyRegistrations
+// Shows the logged-in contact's event registrations,
+// split into Upcoming and Past sections.
+// URL params: ?session=TOKEN
+// ============================================================
+
+
+// ── DELUGE SCRIPT (paste into page Script tab) ───────────────
+
+PORTAL_BASE = "YOUR_PORTAL_BASE_URL";
+
+p_session = input.session;
+sess_check = fn_validateSession(p_session);
+
+if(sess_check.get("valid").toString() != "true")
+{
+	nav_html = "";
+	page_content = "<script>window.location.href='" + PORTAL_BASE + "/#Page:Login?error=session_expired';</script>";
+}
+else
+{
+	contact_id = sess_check.get("contact_id").toString();
+	contact    = fn_getContactProfile(contact_id);
+	full_name  = contact.get("full_name").toString();
+
+	nav_html = "<header class='portal-header'>"
+	         + "<span class='brand'>Josh.ai Event Portal</span>"
+	         + "<span class='user-chip'>" + full_name + "</span>"
+	         + "</header>"
+	         + "<nav class='portal-nav'>"
+	         + "<a href='" + PORTAL_BASE + "/#Page:Events?session=" + p_session + "'>Events</a>"
+	         + "<a href='" + PORTAL_BASE + "/#Page:MyRegistrations?session=" + p_session + "' class='active'>My Registrations</a>"
+	         + "<a href='" + PORTAL_BASE + "/#Page:MyCertifications?session=" + p_session + "'>Certifications</a>"
+	         + "<a href='" + PORTAL_BASE + "/#Page:Login' style='float:right;'>Sign Out</a>"
+	         + "</nav>";
+
+	// Fetch all registrations
+	all_regs = fn_getMyRegistrations(contact_id);
+
+	today_str = zoho.currentdate.toString("yyyy-MM-dd");
+
+	upcoming_html = "";
+	past_html     = "";
+	upcoming_count = 0;
+	past_count     = 0;
+
+	for each reg in all_regs
+	{
+		reg_id      = reg.get("registration_id").toString();
+		reg_status  = reg.get("reg_status").toString();
+		event_id    = reg.get("event_id").toString();
+		event_name  = reg.get("event_name").toString();
+		event_type  = reg.get("event_type").toString();
+		delivery    = reg.get("delivery_type").toString();
+		start_time  = reg.get("start_time").toString();
+		end_time    = reg.get("end_time").toString();
+		vlink       = reg.get("virtual_link").toString();
+		loc_name    = reg.get("location_name").toString();
+		city        = reg.get("city").toString();
+		state       = reg.get("state").toString();
+		ev_status   = reg.get("event_status").toString();
+
+		// Date for sorting
+		start_date  = "";
+		if(start_time.length() >= 10) { start_date = start_time.subString(0, 10); }
+
+		display_start = "";
+		if(start_time.length() >= 16) { display_start = start_time.subString(0, 10) + " at " + start_time.subString(11, 16); }
+
+		// Status badge
+		status_class = "badge-registered";
+		if(reg_status == "Attended")  { status_class = "badge-attended"; }
+		if(reg_status == "No-Show")   { status_class = "badge-noshow"; }
+		if(reg_status == "Cancelled") { status_class = "badge-cancelled"; }
+		if(reg_status == "Waitlisted") { status_class = "badge-waitlisted"; }
+
+		// Delivery badge
+		delivery_class = "badge-virtual";
+		delivery_icon = "💻";
+		if(delivery == "In-Person") { delivery_class = "badge-inperson"; delivery_icon = "📍"; }
+		if(delivery == "Hybrid")    { delivery_class = "badge-hybrid";   delivery_icon = "🔀"; }
+
+		// Location
+		loc_str = "";
+		if(delivery == "Virtual")
+		{
+			if(vlink != "") { loc_str = "<a href='" + vlink + "' target='_blank' class='join-link'>Join virtual event ↗</a>"; }
+			else { loc_str = "Virtual — link coming soon"; }
+		}
+		else
+		{
+			loc_str = loc_name;
+			if(city != "") { loc_str = loc_str + " · " + city; }
+			if(state != "") { loc_str = loc_str + ", " + state; }
+		}
+
+		// Detail link
+		detail_url = PORTAL_BASE + "/#Page:EventDetail?session=" + p_session + "&event_id=" + event_id;
+
+		// Cancel button (only for upcoming, active registrations)
+		cancel_btn = "";
+		if(start_date >= today_str && (reg_status == "Registered" || reg_status == "Waitlisted"))
+		{
+			cancel_url = PORTAL_BASE + "/#Page:EventDetail?session=" + p_session + "&event_id=" + event_id + "&action=cancel&reg_id=" + reg_id;
+			cancel_btn = "<a href='" + cancel_url + "' class='btn-cancel' onclick=\"return confirm('Cancel your registration?');\">Cancel</a>";
+		}
+
+		card = "<div class='reg-card'>"
+		     + "<div class='reg-header'>"
+		     + "<span class='badge " + status_class + "'>" + reg_status + "</span>"
+		     + "<span class='badge " + delivery_class + "'>" + delivery_icon + " " + delivery + "</span>"
+		     + "</div>"
+		     + "<h3 class='reg-title'><a href='" + detail_url + "'>" + event_name + "</a></h3>"
+		     + "<div class='reg-details'>";
+
+		if(display_start != "")
+		{
+			card = card + "<div class='detail-row'><span class='di'>📅</span><span>" + display_start + "</span></div>";
+		}
+		if(loc_str != "")
+		{
+			card = card + "<div class='detail-row'><span class='di'>📍</span><span>" + loc_str + "</span></div>";
+		}
+		if(event_type != "")
+		{
+			card = card + "<div class='detail-row'><span class='di'>🏷</span><span>" + event_type + "</span></div>";
+		}
+
+		card = card + "</div>"
+		     + "<div class='reg-actions'>"
+		     + "<a href='" + detail_url + "' class='btn-view'>View Details</a>"
+		     + cancel_btn
+		     + "</div>"
+		     + "</div>";
+
+		// Sort into upcoming vs past
+		if(reg_status == "Cancelled") { past_count = past_count + 1; past_html = past_html + card; }
+		else if(start_date < today_str) { past_count = past_count + 1; past_html = past_html + card; }
+		else { upcoming_count = upcoming_count + 1; upcoming_html = upcoming_html + card; }
+	}
+
+	// Empty states
+	if(upcoming_count == 0)
+	{
+		upcoming_html = "<div class='empty-state'>"
+		              + "<div class='empty-icon'>📅</div>"
+		              + "<h3>No upcoming registrations</h3>"
+		              + "<p><a href='" + PORTAL_BASE + "/#Page:Events?session=" + p_session + "'>Browse available events →</a></p>"
+		              + "</div>";
+	}
+
+	if(past_count == 0)
+	{
+		past_html = "<p style='color:#9ca3af;font-size:14px;padding:20px 0;'>No past events on record.</p>";
+	}
+
+	page_content = "<section>"
+	             + "<h2 class='section-title'>Upcoming (" + upcoming_count + ")</h2>"
+	             + upcoming_html
+	             + "</section>"
+	             + "<section style='margin-top:40px;'>"
+	             + "<h2 class='section-title' style='color:#6b7280;'>Past &amp; Cancelled (" + past_count + ")</h2>"
+	             + past_html
+	             + "</section>";
+}
+
+
+// ── HTML COMPONENT ───────────────────────────────────────────
+
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif; background: #f0f2f5; color: #212121; }
+.portal-header { background: #0d1b2a; color: white; padding: 14px 24px; display: flex; align-items: center; justify-content: space-between; }
+.brand { font-size: 18px; font-weight: 700; }
+.user-chip { background: rgba(255,255,255,0.12); padding: 4px 12px; border-radius: 20px; font-size: 13px; }
+.portal-nav { background: #162032; padding: 0 20px; overflow: hidden; }
+.portal-nav a { color: rgba(255,255,255,0.65); text-decoration: none; display: inline-block; padding: 12px 16px; font-size: 14px; font-weight: 500; }
+.portal-nav a:hover { color: white; }
+.portal-nav a.active { color: white; border-bottom: 2px solid #60a5fa; }
+.main { max-width: 860px; margin: 0 auto; padding: 28px 20px; }
+.section-title { font-size: 18px; font-weight: 700; color: #0d1b2a; margin-bottom: 16px; }
+.reg-card { background: white; border-radius: 10px; padding: 20px 22px; margin-bottom: 12px; box-shadow: 0 1px 4px rgba(0,0,0,0.07); }
+.reg-header { margin-bottom: 8px; }
+.badge { display: inline-block; padding: 3px 10px; border-radius: 20px; font-size: 11px; font-weight: 700; margin-right: 6px; text-transform: uppercase; letter-spacing: 0.4px; }
+.badge-registered { background: #dcfce7; color: #166534; }
+.badge-attended { background: #dbeafe; color: #1e40af; }
+.badge-noshow { background: #fee2e2; color: #991b1b; }
+.badge-cancelled { background: #f3f4f6; color: #6b7280; }
+.badge-waitlisted { background: #fef3c7; color: #92400e; }
+.badge-inperson { background: #dbeafe; color: #1e40af; }
+.badge-virtual { background: #dcfce7; color: #166534; }
+.badge-hybrid { background: #fff7ed; color: #c2410c; }
+.reg-title { font-size: 16px; font-weight: 700; color: #0d1b2a; margin-bottom: 10px; }
+.reg-title a { color: inherit; text-decoration: none; }
+.reg-title a:hover { text-decoration: underline; }
+.reg-details { margin-bottom: 14px; }
+.detail-row { display: flex; gap: 8px; margin-bottom: 4px; font-size: 13px; color: #555; align-items: flex-start; }
+.di { min-width: 18px; }
+.join-link { color: #0069c0; text-decoration: none; font-weight: 600; }
+.reg-actions { display: flex; gap: 10px; align-items: center; }
+.btn-view { display: inline-block; padding: 7px 16px; background: #0d1b2a; color: white; border-radius: 6px; font-size: 13px; font-weight: 600; text-decoration: none; }
+.btn-cancel { display: inline-block; padding: 7px 16px; color: #6b7280; border: 1px solid #d1d5db; border-radius: 6px; font-size: 13px; text-decoration: none; }
+.btn-cancel:hover { border-color: #ef4444; color: #dc2626; }
+.empty-state { text-align: center; padding: 50px 20px; color: #9ca3af; }
+.empty-icon { font-size: 40px; margin-bottom: 12px; }
+.empty-state h3 { font-size: 16px; font-weight: 600; color: #6b7280; margin-bottom: 10px; }
+.empty-state a { color: #0069c0; text-decoration: none; font-size: 14px; }
+</style>
+
+{%nav_html%}
+<div class="main">
+  <h1 style="font-size:24px;font-weight:700;color:#0d1b2a;margin-bottom:24px;">My Registrations</h1>
+  {%page_content%}
+</div>

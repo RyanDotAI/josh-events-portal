@@ -1,0 +1,20 @@
+[build]
+  publish = "web"
+
+# Route /api/events/{id} to events function (specific route first)
+[[redirects]]
+  from = "/api/events/*"
+  to   = "/.netlify/functions/events"
+  status = 200
+
+# Route /api/events to events function
+[[redirects]]
+  from = "/api/events"
+  to   = "/.netlify/functions/events"
+  status = 200
+
+# Route /api/register to register function
+[[redirects]]
+  from = "/api/register"
+  to   = "/.netlify/functions/register"
+  status = 200

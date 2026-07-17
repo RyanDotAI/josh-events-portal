@@ -1,0 +1,58 @@
+// ============================================================
+// PAGE: Verify
+// Magic link landing page. Reads the token from the URL,
+// validates it, and redirects to Events with a session token.
+// No HTML needed — this page only redirects.
+// ============================================================
+
+
+// ── DELUGE SCRIPT (paste into page Script tab) ───────────────
+
+PORTAL_BASE = "YOUR_PORTAL_BASE_URL";
+
+p_token = input.token;
+
+if(p_token == null || p_token == "")
+{
+	// No token in URL — send to login
+	page_content = "<script>window.location.href='" + PORTAL_BASE + "/#Page:Login?error=invalid';</script>";
+}
+else
+{
+	result = fn_verifyToken(p_token);
+
+	if(result.get("valid").toString() == "true")
+	{
+		session_tok = result.get("session_token").toString();
+		page_content = "<script>window.location.href='" + PORTAL_BASE + "/#Page:Events?session=" + session_tok + "';</script>";
+	}
+	else
+	{
+		err = result.get("error").toString();
+		if(err == "expired")
+		{
+			page_content = "<script>window.location.href='" + PORTAL_BASE + "/#Page:Login?error=expired';</script>";
+		}
+		else
+		{
+			page_content = "<script>window.location.href='" + PORTAL_BASE + "/#Page:Login?error=invalid';</script>";
+		}
+	}
+}
+
+
+// ── HTML COMPONENT ───────────────────────────────────────────
+
+<style>
+body { font-family: -apple-system, sans-serif; background: #f0f2f5; display: flex; align-items: center; justify-content: center; height: 100vh; }
+.msg { text-align: center; color: #555; }
+.spinner { width: 36px; height: 36px; border: 3px solid #e0e0e0; border-top-color: #0d1b2a; border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto 16px; }
+@keyframes spin { to { transform: rotate(360deg); } }
+</style>
+
+<div class="msg">
+  <div class="spinner"></div>
+  <p>Verifying your link…</p>
+</div>
+
+{%page_content%}

@@ -1,0 +1,68 @@
+// FUNCTION: fn_getMyRegistrations
+// Returns all event registrations for a given contact, with event details joined in.
+// Results include both upcoming and past events so the page can split them.
+//
+// Each item in the returned list is a map with keys:
+//   registration_id, reg_status, reg_date, event_id, event_name, event_type,
+//   delivery_type, start_time, end_time, virtual_link, location_name, city, state,
+//   event_status
+//
+// Signature: list fn_getMyRegistrations(string p_contact_id)
+
+list fn_getMyRegistrations(string p_contact_id)
+{
+	if(p_contact_id == null || p_contact_id == "")
+	{
+		return list();
+	}
+
+	// Search all registrations for this contact
+	regs = zoho.crm.searchRecords("Event_Registrations",
+		"(Contact:equals:" + p_contact_id + ")", 1, 200, null, null);
+
+	if(regs == null || regs.size() == 0)
+	{
+		return list();
+	}
+
+	result = list();
+
+	for each reg in regs
+	{
+		reg_map = map();
+		reg_map.put("registration_id", reg.get("id").toString());
+		reg_map.put("reg_status",      ifnull(reg.get("Status"), "").toString());
+		reg_map.put("reg_date",        ifnull(reg.get("Registration_Date"), "").toString());
+
+		// Fetch the linked event record
+		event_lookup = reg.get("Event");
+		if(event_lookup == null)
+		{
+			continue;
+		}
+
+		event_id = event_lookup.get("id").toString();
+		ev = zoho.crm.getRecordById("Event_Master", event_id.toLong());
+
+		if(ev == null)
+		{
+			continue;
+		}
+
+		reg_map.put("event_id",       event_id);
+		reg_map.put("event_name",     ifnull(ev.get("Name"), "").toString());
+		reg_map.put("event_type",     ifnull(ev.get("Event_Type"), "").toString());
+		reg_map.put("delivery_type",  ifnull(ev.get("Delivery_Type"), "").toString());
+		reg_map.put("start_time",     ifnull(ev.get("Start_Time"), "").toString());
+		reg_map.put("end_time",       ifnull(ev.get("End_Time"), "").toString());
+		reg_map.put("virtual_link",   ifnull(ev.get("Virtual_Meeting_Link"), "").toString());
+		reg_map.put("location_name",  ifnull(ev.get("Event_Location_Name"), "").toString());
+		reg_map.put("city",           ifnull(ev.get("Event_Address_City"), "").toString());
+		reg_map.put("state",          ifnull(ev.get("Event_Address_State_Province"), "").toString());
+		reg_map.put("event_status",   ifnull(ev.get("Event_Status"), "").toString());
+
+		result.add(reg_map);
+	}
+
+	return result;
+}

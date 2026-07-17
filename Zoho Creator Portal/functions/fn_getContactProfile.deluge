@@ -1,0 +1,58 @@
+// FUNCTION: fn_getContactProfile
+// Fetches a CRM Contact record by ID and returns a clean map of portal-relevant fields.
+// Returns an empty map if the contact is not found.
+// Called by: all pages after session validation
+//
+// Signature: map fn_getContactProfile(string p_contact_id)
+
+map fn_getContactProfile(string p_contact_id)
+{
+	profile = map();
+
+	if(p_contact_id == null || p_contact_id == "")
+	{
+		return profile;
+	}
+
+	contact = zoho.crm.getRecordById("Contacts", p_contact_id.toLong());
+
+	if(contact == null)
+	{
+		return profile;
+	}
+
+	// Core identity
+	profile.put("id",           p_contact_id);
+	profile.put("first_name",   ifnull(contact.get("First_Name"), "").toString());
+	profile.put("last_name",    ifnull(contact.get("Last_Name"), "").toString());
+	profile.put("email",        ifnull(contact.get("Email"), "").toString());
+	profile.put("full_name",    (ifnull(contact.get("First_Name"), "") + " " + ifnull(contact.get("Last_Name"), "")).trim());
+
+	// Audience / gating fields
+	profile.put("org_label",     ifnull(contact.get("Organization_Label"), "").toString());
+	profile.put("regional_team", ifnull(contact.get("Regional_Team"), "").toString());
+
+	// Rep firm — stored as a lookup map; extract the name
+	rep_firm_field = contact.get("Rep_Firm");
+	if(rep_firm_field != null)
+	{
+		profile.put("rep_firm", ifnull(rep_firm_field.get("name"), "").toString());
+	}
+	else
+	{
+		profile.put("rep_firm", "");
+	}
+
+	// Account / company
+	account_field = contact.get("Account_Name");
+	if(account_field != null)
+	{
+		profile.put("account_name", ifnull(account_field.get("name"), "").toString());
+	}
+	else
+	{
+		profile.put("account_name", "");
+	}
+
+	return profile;
+}

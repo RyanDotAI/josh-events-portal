@@ -1,0 +1,48 @@
+// FUNCTION: fn_getAudienceTypes
+// Returns the list of Event Audience_Type values a contact is eligible to see,
+// based on their CRM Organization_Label.
+// Called by: fn_getFilteredEvents
+//
+// Signature: list fn_getAudienceTypes(string p_org_label)
+
+list fn_getAudienceTypes(string p_org_label)
+{
+	audience_types = list();
+
+	if(p_org_label == "Dealer" || p_org_label == "Buying Group" || p_org_label == "Partner Showroom")
+	{
+		audience_types.add("Dealer");
+		audience_types.add("End User");
+	}
+	else if(p_org_label == "Rep Firm")
+	{
+		audience_types.add("Rep");
+		audience_types.add("Dealer");
+		audience_types.add("End User");
+	}
+	else if(p_org_label == "Specifier")
+	{
+		audience_types.add("Specifier");
+		audience_types.add("Designer");
+		audience_types.add("End User");
+	}
+	else if(p_org_label == "Industry Partner")
+	{
+		audience_types.add("Designer");
+		audience_types.add("Specifier");
+		audience_types.add("End User");
+	}
+	else if(p_org_label == "Nimble Dev Partner")
+	{
+		audience_types.add("Designer");
+		audience_types.add("Dealer");
+		audience_types.add("End User");
+	}
+	else
+	{
+		// Fallback: any valid contact can see End User events
+		audience_types.add("End User");
+	}
+
+	return audience_types;
+}

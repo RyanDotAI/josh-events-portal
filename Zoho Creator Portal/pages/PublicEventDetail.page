@@ -1,0 +1,291 @@
+// ============================================================
+// PAGE: PublicEventDetail
+// Unauthenticated event detail page with registration form.
+// Shows full event info and captures guest registrations.
+//
+// URL params: ?event_id=EVENTID
+// Post-submit states: ?event_id=EVENTID&status=success|already|full|closed|error
+//
+// In Creator portal settings, mark this page as "Public" (no login required).
+//
+// FORM SETUP (required):
+//   Add a Creator Form to this page with these fields:
+//   - First_Name     (Single Line, required)
+//   - Last_Name      (Single Line, required)
+//   - Email          (Email, required)
+//   - Company        (Single Line, required)
+//   - Phone          (Phone, optional)
+//   - Event_ID       (Single Line, hidden, pre-filled from URL param "event_id")
+//
+//   On Submit workflow (Deluge):
+//     event_id  = input.Event_ID.toString();
+//     fname     = input.First_Name.toString().trim();
+//     lname     = input.Last_Name.toString().trim();
+//     email     = input.Email.toString().toLowercase().trim();
+//     company   = input.Company.toString().trim();
+//     phone     = input.Phone.toString().trim();
+//
+//     result = fn_registerGuest(event_id, fname, lname, email, company, phone);
+//     status = result.get("status").toString();
+//
+//     redirect_url = "YOUR_PORTAL_BASE_URL/#Page:PublicEventDetail?event_id=" + event_id + "&status=";
+//
+//     if(status == "SUCCESS")           { zoho.redirect(redirect_url + "success"); }
+//     else if(status == "ALREADY_REGISTERED") { zoho.redirect(redirect_url + "already"); }
+//     else if(status == "FULL")         { zoho.redirect(redirect_url + "full"); }
+//     else if(status == "CLOSED")       { zoho.redirect(redirect_url + "closed"); }
+//     else                              { zoho.redirect(redirect_url + "error"); }
+//
+//   To pre-fill Event_ID from the URL:
+//   In the form field settings for Event_ID, set "Default value" to "URL Parameter" = "event_id"
+//   Mark the field as Hidden.
+// ============================================================
+
+
+// ── DELUGE SCRIPT (paste into page Script tab) ───────────────
+
+PORTAL_BASE = "YOUR_PORTAL_BASE_URL";
+
+p_event_id = ifnull(input.event_id, "").toString();
+p_status   = ifnull(input.status, "").toString();
+
+if(p_event_id == "")
+{
+	page_content = "<script>window.location.href='" + PORTAL_BASE + "/#Page:PublicEvents';</script>";
+	event_html   = "";
+}
+else
+{
+	// Fetch event
+	ev = zoho.crm.getRecordById("Event_Master", p_event_id.toLong());
+
+	if(ev == null)
+	{
+		page_content = "<div class='alert alert-error'>Event not found. <a href='" + PORTAL_BASE + "/#Page:PublicEvents'>← Back to events</a></div>";
+		event_html   = "";
+	}
+	else
+	{
+		// Verify the event is public
+		is_public  = ifnull(ev.get("Is_Public"), false);
+		ev_status  = ifnull(ev.get("Event_Status"), "").toString();
+
+		if(is_public.toString() != "true" || ev_status != "Open for Registration")
+		{
+			page_content = "<div class='alert alert-error'>This event is not publicly available. "
+			             + "<a href='" + PORTAL_BASE + "/#Page:PublicEvents'>← Back to events</a></div>";
+			event_html   = "";
+		}
+		else
+		{
+			ev_name     = ifnull(ev.get("Name"), "").toString();
+			ev_type     = ifnull(ev.get("Event_Type"), "").toString();
+			ev_delivery = ifnull(ev.get("Delivery_Type"), "").toString();
+			ev_start    = ifnull(ev.get("Start_Time"), "").toString();
+			ev_end      = ifnull(ev.get("End_Time"), "").toString();
+			ev_desc     = ifnull(ev.get("Event_Description"), "").toString();
+			ev_loc      = ifnull(ev.get("Event_Location_Name"), "").toString();
+			ev_city     = ifnull(ev.get("Event_Address_City"), "").toString();
+			ev_state    = ifnull(ev.get("Event_Address_State_Province"), "").toString();
+			ev_vlink    = ifnull(ev.get("Virtual_Meeting_Link"), "").toString();
+			ev_close    = ifnull(ev.get("Registration_Close_Date"), "").toString();
+			ev_cap      = ifnull(ev.get("Capacity"), "").toString();
+			ev_tz       = ifnull(ev.get("Event_Timezone"), "").toString();
+
+			start_clean   = ev_start.replaceAll("T", " ").subString(0, 19);
+			display_start = start_clean.subString(0, 10) + " at " + start_clean.subString(11, 16);
+			if(ev_tz != "") { display_start = display_start + " " + ev_tz; }
+
+			end_clean   = ev_end.replaceAll("T", " ").subString(0, 19);
+			display_end = end_clean.subString(0, 10) + " at " + end_clean.subString(11, 16);
+
+			// ── Status banner ─────────────────────────────────────────────────
+			banner = "";
+			if(p_status == "success")
+			{
+				banner = "<div class='alert alert-success'>✓ You're registered! A confirmation email with calendar links has been sent to you.</div>";
+			}
+			else if(p_status == "already")
+			{
+				banner = "<div class='alert alert-info'>You're already registered for this event. Check your email for confirmation details.</div>";
+			}
+			else if(p_status == "full")
+			{
+				banner = "<div class='alert alert-error'>This event is full. Email <a href='mailto:events@josh.ai'>events@josh.ai</a> to join the waitlist.</div>";
+			}
+			else if(p_status == "closed")
+			{
+				banner = "<div class='alert alert-error'>Registration for this event has closed.</div>";
+			}
+			else if(p_status == "error")
+			{
+				banner = "<div class='alert alert-error'>Something went wrong. Please try again or email <a href='mailto:events@josh.ai'>events@josh.ai</a>.</div>";
+			}
+
+			// ── Location block ────────────────────────────────────────────────
+			loc_block = "";
+			if(ev_delivery == "Virtual" || ev_delivery == "Hybrid")
+			{
+				if(ev_vlink != "")
+				{
+					loc_block = "<div class='info-row'><span class='info-label'>Join Link</span>"
+					          + "<span><a href='" + ev_vlink + "' target='_blank' style='color:#0069c0;'>" + ev_vlink + "</a></span></div>";
+				}
+				else
+				{
+					loc_block = "<div class='info-row'><span class='info-label'>Format</span><span>" + ev_delivery + " — virtual link sent before event</span></div>";
+				}
+			}
+			if(ev_delivery == "In-Person" || ev_delivery == "Hybrid")
+			{
+				loc_str = ev_loc;
+				if(ev_city != "")  { loc_str = loc_str + " · " + ev_city; }
+				if(ev_state != "") { loc_str = loc_str + ", " + ev_state; }
+				if(loc_str.trim() != "") { loc_block = loc_block + "<div class='info-row'><span class='info-label'>Location</span><span>" + loc_str + "</span></div>"; }
+			}
+
+			// ── Capacity ──────────────────────────────────────────────────────
+			cap_line = "";
+			if(ev_cap != "" && ev_cap != "0" && ev_cap != "null")
+			{
+				cap_line = "<div class='info-row'><span class='info-label'>Capacity</span><span>Limited to " + ev_cap + " attendees</span></div>";
+			}
+
+			// ── Close date ────────────────────────────────────────────────────
+			close_line = "";
+			if(ev_close != "" && ev_close != "null")
+			{
+				close_line = "<div class='info-row'><span class='info-label'>Register by</span><span>" + ev_close + "</span></div>";
+			}
+
+			// ── Description ───────────────────────────────────────────────────
+			desc_block = "";
+			if(ev_desc != "" && ev_desc != "null")
+			{
+				desc_block = "<div class='desc-block'><h3>About this event</h3><p>" + ev_desc + "</p></div>";
+			}
+
+			// ── Badges ────────────────────────────────────────────────────────
+			delivery_class = "badge-virtual";
+			delivery_icon  = "💻";
+			if(ev_delivery == "In-Person") { delivery_class = "badge-inperson"; delivery_icon = "📍"; }
+			if(ev_delivery == "Hybrid")    { delivery_class = "badge-hybrid";   delivery_icon = "🔀"; }
+			type_class = "badge-training";
+			if(ev_type.contains("Webinar")) { type_class = "badge-webinar"; }
+			if(ev_type.contains("Meeting")) { type_class = "badge-meeting"; }
+			if(ev_type.contains("CEU"))     { type_class = "badge-ceu"; }
+
+			// ── Registration form (shown only when not yet confirmed) ──────────
+			today_str = zoho.currentdate.toString("yyyy-MM-dd");
+			is_closed = (ev_close != "" && ev_close != "null" && ev_close < today_str);
+
+			form_note = "";
+			if(p_status == "success" || is_closed)
+			{
+				form_note = "";  // hide form after success or closure
+			}
+
+			event_html = "<a href='" + PORTAL_BASE + "/#Page:PublicEvents' class='back-link'>← Back to events</a>"
+			           + banner
+			           + "<div class='event-card'>"
+			           + "<div class='ev-badges'>"
+			           + "<span class='badge " + type_class + "'>" + ev_type + "</span>"
+			           + "<span class='badge " + delivery_class + "'>" + delivery_icon + " " + ev_delivery + "</span>"
+			           + "</div>"
+			           + "<h1 class='detail-title'>" + ev_name + "</h1>"
+			           + "<div class='info-grid'>"
+			           + "<div class='info-row'><span class='info-label'>Starts</span><span>" + display_start + "</span></div>"
+			           + "<div class='info-row'><span class='info-label'>Ends</span><span>" + display_end + "</span></div>"
+			           + loc_block
+			           + close_line
+			           + cap_line
+			           + "</div>"
+			           + desc_block
+			           + "</div>";
+
+			// The form component goes below this HTML block in Creator's page editor.
+			// Show a heading for the form section:
+			if(p_status != "success" && !is_closed)
+			{
+				page_content = "<div class='form-heading'>"
+				             + "<h2>Register for this event</h2>"
+				             + "<p>Fill out the form below. A confirmation email will be sent to you immediately.</p>"
+				             + "</div>";
+			}
+			else if(is_closed)
+			{
+				page_content = "<div class='alert alert-error'>Registration for this event has closed.</div>";
+			}
+			else
+			{
+				page_content = "<div class='success-note'>✓ Check your inbox for your confirmation and calendar links.</div>";
+			}
+		}
+	}
+}
+
+
+// ── HTML COMPONENT ───────────────────────────────────────────
+
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif; background: #f0f2f5; color: #212121; }
+.portal-header { background: #0d1b2a; color: white; padding: 14px 24px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; }
+.brand { font-size: 18px; font-weight: 700; }
+.header-links a { color: rgba(255,255,255,0.75); text-decoration: none; font-size: 13px; padding: 6px 14px; border-radius: 20px; border: 1px solid rgba(255,255,255,0.25); }
+.header-links a:hover { background: rgba(255,255,255,0.1); color: white; }
+.header-links a.signin { background: white; color: #0d1b2a; border-color: white; font-weight: 600; }
+.main { max-width: 860px; margin: 0 auto; padding: 28px 20px; display: grid; grid-template-columns: 1fr 380px; gap: 24px; align-items: start; }
+@media (max-width: 720px) { .main { grid-template-columns: 1fr; } }
+.left-col {}
+.right-col { background: white; border-radius: 12px; padding: 28px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); position: sticky; top: 20px; }
+.back-link { display: inline-block; color: #0069c0; font-size: 14px; text-decoration: none; margin-bottom: 16px; }
+.back-link:hover { text-decoration: underline; }
+.alert { padding: 12px 16px; border-radius: 8px; margin-bottom: 16px; font-size: 14px; line-height: 1.5; }
+.alert-success { background: #dcfce7; color: #166534; border-left: 4px solid #22c55e; }
+.alert-error { background: #fee2e2; color: #991b1b; border-left: 4px solid #ef4444; }
+.alert-info { background: #dbeafe; color: #1e40af; border-left: 4px solid #3b82f6; }
+.alert a { color: inherit; font-weight: 600; }
+.event-card { background: white; border-radius: 12px; padding: 28px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); margin-bottom: 16px; }
+.ev-badges { margin-bottom: 14px; }
+.badge { display: inline-block; padding: 3px 10px; border-radius: 20px; font-size: 11px; font-weight: 700; margin-right: 6px; text-transform: uppercase; letter-spacing: 0.4px; }
+.badge-training { background: #ede9fe; color: #5b21b6; }
+.badge-webinar { background: #e0f2fe; color: #0369a1; }
+.badge-meeting { background: #fce7f3; color: #9d174d; }
+.badge-ceu { background: #fef9c3; color: #854d0e; }
+.badge-inperson { background: #dbeafe; color: #1e40af; }
+.badge-virtual { background: #dcfce7; color: #166534; }
+.badge-hybrid { background: #fff7ed; color: #c2410c; }
+.detail-title { font-size: 24px; font-weight: 700; color: #0d1b2a; margin-bottom: 20px; line-height: 1.3; }
+.info-grid { border-top: 1px solid #eee; padding-top: 18px; margin-bottom: 20px; }
+.info-row { display: flex; gap: 14px; padding: 9px 0; border-bottom: 1px solid #f3f4f6; font-size: 14px; }
+.info-label { min-width: 100px; font-weight: 600; color: #555; }
+.desc-block { margin-top: 4px; }
+.desc-block h3 { font-size: 15px; font-weight: 700; color: #0d1b2a; margin-bottom: 8px; }
+.desc-block p { color: #555; font-size: 14px; line-height: 1.7; white-space: pre-wrap; }
+.form-heading h2 { font-size: 18px; font-weight: 700; color: #0d1b2a; margin-bottom: 6px; }
+.form-heading p { font-size: 13px; color: #666; margin-bottom: 16px; }
+.success-note { background: #dcfce7; color: #166534; padding: 14px 18px; border-radius: 8px; font-weight: 600; font-size: 14px; }
+.partner-note { margin-top: 20px; padding-top: 16px; border-top: 1px solid #eee; font-size: 12px; color: #9ca3af; text-align: center; }
+.partner-note a { color: #0069c0; }
+</style>
+
+<header class="portal-header">
+  <span class="brand">Josh.ai Events</span>
+  <div class="header-links">
+    <a href="YOUR_PORTAL_BASE_URL/#Page:Login" class="signin">Partner Sign In</a>
+  </div>
+</header>
+
+<div class="main">
+  <div class="left-col">
+    {%event_html%}
+  </div>
+  <div class="right-col">
+    {%page_content%}
+    <!-- Creator Form component goes here (see FORM SETUP in file header) -->
+    <div class="partner-note">
+      Already a Josh.ai partner? <a href="YOUR_PORTAL_BASE_URL/#Page:Login">Sign in</a> for your full event listing.
+    </div>
+  </div>
+</div>

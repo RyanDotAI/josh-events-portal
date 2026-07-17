@@ -1,0 +1,437 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Event Details — Josh.ai</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+      background: #f7f7f7;
+      color: #111;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .site-header {
+      background: #000;
+      padding: 0 40px;
+      height: 60px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .site-header .logo {
+      color: #fff;
+      font-size: 18px;
+      font-weight: 700;
+      letter-spacing: -0.5px;
+      text-decoration: none;
+    }
+    .site-header .back-link {
+      color: rgba(255,255,255,0.65);
+      font-size: 13px;
+      text-decoration: none;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .site-header .back-link:hover { color: #fff; }
+
+    .main {
+      max-width: 820px;
+      margin: 0 auto;
+      padding: 40px 24px 80px;
+    }
+
+    /* ── Event header ── */
+    .event-header { margin-bottom: 32px; }
+    .ev-badges { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 14px; }
+    .badge {
+      display: inline-block;
+      padding: 4px 10px;
+      border-radius: 20px;
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .badge-type    { background: #f0edff; color: #4c35a0; }
+    .badge-virtual { background: #e6f7ee; color: #1a7a40; }
+    .badge-inperson{ background: #e8f0ff; color: #1a40a0; }
+    .badge-hybrid  { background: #fff4e6; color: #a06010; }
+
+    .event-title {
+      font-size: 28px;
+      font-weight: 700;
+      letter-spacing: -0.6px;
+      color: #000;
+      margin-bottom: 20px;
+      line-height: 1.25;
+    }
+    .event-meta-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+      gap: 14px;
+      background: #fff;
+      border: 1px solid #eee;
+      border-radius: 10px;
+      padding: 20px 24px;
+      margin-bottom: 28px;
+    }
+    .meta-item label {
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.6px;
+      color: #999;
+      display: block;
+      margin-bottom: 3px;
+    }
+    .meta-item .meta-value {
+      font-size: 14px;
+      font-weight: 600;
+      color: #111;
+    }
+    .meta-item a { color: #0066cc; text-decoration: none; }
+    .meta-item a:hover { text-decoration: underline; }
+
+    .event-description {
+      font-size: 15px;
+      line-height: 1.7;
+      color: #444;
+      margin-bottom: 36px;
+    }
+
+    /* ── Registration form ── */
+    .reg-section { background: #fff; border-radius: 10px; padding: 32px; box-shadow: 0 1px 4px rgba(0,0,0,0.07); }
+    .reg-section h2 {
+      font-size: 18px;
+      font-weight: 700;
+      margin-bottom: 24px;
+      color: #000;
+    }
+
+    .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 14px; }
+    .form-row.single { grid-template-columns: 1fr; }
+
+    .form-group label {
+      display: block;
+      font-size: 12px;
+      font-weight: 600;
+      color: #555;
+      margin-bottom: 5px;
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+    }
+    .form-group input {
+      width: 100%;
+      padding: 10px 14px;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      font-size: 14px;
+      color: #111;
+      background: #fafafa;
+      transition: border-color 0.15s, background 0.15s;
+    }
+    .form-group input:focus {
+      outline: none;
+      border-color: #000;
+      background: #fff;
+    }
+    .form-group input.error { border-color: #e53e3e; background: #fff5f5; }
+
+    .form-footer { margin-top: 20px; display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+    .btn {
+      display: inline-block;
+      padding: 12px 28px;
+      border-radius: 6px;
+      font-size: 14px;
+      font-weight: 600;
+      text-decoration: none;
+      text-align: center;
+      cursor: pointer;
+      border: none;
+      transition: opacity 0.15s;
+    }
+    .btn:hover { opacity: 0.85; }
+    .btn:disabled { opacity: 0.45; cursor: not-allowed; }
+    .btn-primary { background: #000; color: #fff; }
+    .form-note { font-size: 12px; color: #888; }
+
+    /* ── Result states ── */
+    .reg-result {
+      display: none;
+      border-radius: 8px;
+      padding: 20px 24px;
+      margin-top: 20px;
+      font-size: 14px;
+      font-weight: 500;
+    }
+    .reg-result.success { background: #e6f7ee; color: #1a5c35; border: 1px solid #c3e6cb; }
+    .reg-result.already { background: #fff8e6; color: #7a4e0a; border: 1px solid #f5d79e; }
+    .reg-result.full    { background: #feecec; color: #842029; border: 1px solid #f5c2c7; }
+    .reg-result.closed  { background: #feecec; color: #842029; border: 1px solid #f5c2c7; }
+    .reg-result.error   { background: #feecec; color: #842029; border: 1px solid #f5c2c7; }
+    .reg-result .result-title { font-size: 15px; font-weight: 700; margin-bottom: 4px; }
+
+    /* ── Loading state ── */
+    .state-loading {
+      text-align: center;
+      padding: 80px 20px;
+      color: #999;
+    }
+    .spinner {
+      width: 32px; height: 32px;
+      border: 3px solid #eee;
+      border-top-color: #000;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      margin: 0 auto 16px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .state-error { text-align: center; padding: 60px 20px; color: #c0392b; }
+    .state-error h3 { font-size: 18px; margin-bottom: 8px; }
+
+    @media (max-width: 600px) {
+      .site-header { padding: 0 16px; }
+      .main { padding: 24px 16px 60px; }
+      .form-row { grid-template-columns: 1fr; }
+      .event-title { font-size: 22px; }
+    }
+  </style>
+</head>
+<body>
+
+<header class="site-header">
+  <a href="/" class="logo">Josh.ai</a>
+  <a href="javascript:history.back()" class="back-link">← Back to Events</a>
+</header>
+
+<div class="main" id="main">
+  <div class="state-loading">
+    <div class="spinner"></div>
+    <p>Loading event details...</p>
+  </div>
+</div>
+
+<script>
+  // ── Configuration ─────────────────────────────────────────
+  const API_BASE = '/api';  // Netlify: '/api'. Front-end team: set to your full backend URL.
+
+  // ── URL params ────────────────────────────────────────────
+  const params   = new URLSearchParams(window.location.search);
+  const eventId  = params.get('event_id') || '';
+  const audience = params.get('audience') || '';
+
+  // ── Back link with audience param ─────────────────────────
+  document.querySelector('.back-link').href =
+    '/events' + (audience ? '?audience=' + encodeURIComponent(audience) : '');
+
+  // ── Load event ────────────────────────────────────────────
+  async function loadEvent() {
+    if (!eventId) {
+      showError('No event specified.');
+      return;
+    }
+    try {
+      const res  = await fetch(`${API_BASE}/events/${encodeURIComponent(eventId)}`);
+      if (!res.ok) throw new Error('API error ' + res.status);
+      const ev   = await res.json();
+      renderEvent(ev);
+    } catch (err) {
+      showError('Could not load event details. Please try again or contact <a href="mailto:events@josh.ai">events@josh.ai</a>.');
+    }
+  }
+
+  function showError(msg) {
+    document.getElementById('main').innerHTML =
+      `<div class="state-error"><h3>Something went wrong</h3><p>${msg}</p></div>`;
+  }
+
+  function renderEvent(ev) {
+    const deliveryClass = ev.delivery === 'In-Person' ? 'badge-inperson'
+                        : ev.delivery === 'Hybrid'    ? 'badge-hybrid'
+                        : 'badge-virtual';
+
+    const locationHtml = buildLocationHtml(ev);
+    const descHtml     = ev.description
+      ? `<div class="event-description">${esc(ev.description)}</div>`
+      : '';
+
+    const isClosed = ev.is_closed;  // backend computes this from Registration_Close_Date vs today
+
+    document.getElementById('main').innerHTML = `
+      <div class="event-header">
+        <div class="ev-badges">
+          <span class="badge badge-type">${esc(ev.type || '')}</span>
+          <span class="badge ${deliveryClass}">${esc(ev.delivery || '')}</span>
+        </div>
+        <h1 class="event-title">${esc(ev.name)}</h1>
+        <div class="event-meta-grid">
+          <div class="meta-item">
+            <label>Date &amp; Time</label>
+            <div class="meta-value">${esc(ev.start_display || 'TBD')}</div>
+          </div>
+          ${ev.end_display ? `<div class="meta-item"><label>Ends</label><div class="meta-value">${esc(ev.end_display)}</div></div>` : ''}
+          ${locationHtml}
+          ${ev.close_date ? `<div class="meta-item"><label>Register By</label><div class="meta-value">${esc(ev.close_date)}</div></div>` : ''}
+          ${ev.capacity ? `<div class="meta-item"><label>Capacity</label><div class="meta-value">${esc(String(ev.capacity))} attendees</div></div>` : ''}
+        </div>
+        ${descHtml}
+      </div>
+
+      <div class="reg-section" id="regSection">
+        ${isClosed
+          ? `<h2>Registration Closed</h2>
+             <p style="color:#666;font-size:14px;">The registration deadline for this event has passed. Contact <a href="mailto:events@josh.ai">events@josh.ai</a> if you believe this is an error.</p>`
+          : `<h2>Register for This Event</h2>
+             <form id="regForm" novalidate>
+               <div class="form-row">
+                 <div class="form-group">
+                   <label for="firstName">First Name *</label>
+                   <input type="text" id="firstName" name="firstName" required autocomplete="given-name">
+                 </div>
+                 <div class="form-group">
+                   <label for="lastName">Last Name *</label>
+                   <input type="text" id="lastName" name="lastName" required autocomplete="family-name">
+                 </div>
+               </div>
+               <div class="form-row single">
+                 <div class="form-group">
+                   <label for="email">Email Address *</label>
+                   <input type="email" id="email" name="email" required autocomplete="email">
+                 </div>
+               </div>
+               <div class="form-row">
+                 <div class="form-group">
+                   <label for="company">Company</label>
+                   <input type="text" id="company" name="company" autocomplete="organization">
+                 </div>
+                 <div class="form-group">
+                   <label for="phone">Phone</label>
+                   <input type="tel" id="phone" name="phone" autocomplete="tel">
+                 </div>
+               </div>
+               <div class="form-footer">
+                 <button type="submit" class="btn btn-primary" id="submitBtn">Register</button>
+                 <span class="form-note">A confirmation email will be sent to you.</span>
+               </div>
+               <div class="reg-result" id="regResult">
+                 <div class="result-title" id="resultTitle"></div>
+                 <div id="resultBody"></div>
+               </div>
+             </form>`
+        }
+      </div>`;
+
+    if (!isClosed) {
+      document.getElementById('regForm').addEventListener('submit', handleSubmit);
+    }
+  }
+
+  function buildLocationHtml(ev) {
+    if (ev.delivery === 'Virtual') {
+      if (ev.virtual_link) {
+        return `<div class="meta-item"><label>Join Link</label><div class="meta-value"><a href="${esc(ev.virtual_link)}" target="_blank" rel="noopener">Join Online</a></div></div>`;
+      }
+      return `<div class="meta-item"><label>Format</label><div class="meta-value">Virtual — link sent before event</div></div>`;
+    }
+    const parts = [ev.location, ev.city, ev.state].filter(Boolean);
+    if (ev.delivery === 'Hybrid' && ev.virtual_link) {
+      return `<div class="meta-item"><label>Location</label><div class="meta-value">${esc(parts.join(', '))}</div></div>
+              <div class="meta-item"><label>Join Online</label><div class="meta-value"><a href="${esc(ev.virtual_link)}" target="_blank" rel="noopener">Virtual Link</a></div></div>`;
+    }
+    return parts.length
+      ? `<div class="meta-item"><label>Location</label><div class="meta-value">${esc(parts.join(', '))}</div></div>`
+      : '';
+  }
+
+  // ── Form submission ───────────────────────────────────────
+  async function handleSubmit(e) {
+    e.preventDefault();
+
+    const firstName = document.getElementById('firstName').value.trim();
+    const lastName  = document.getElementById('lastName').value.trim();
+    const email     = document.getElementById('email').value.trim();
+    const company   = document.getElementById('company').value.trim();
+    const phone     = document.getElementById('phone').value.trim();
+
+    // Client-side validation
+    let valid = true;
+    ['firstName','lastName','email'].forEach(id => {
+      const el = document.getElementById(id);
+      if (!el.value.trim()) { el.classList.add('error'); valid = false; }
+      else el.classList.remove('error');
+    });
+    if (!email.includes('@')) { document.getElementById('email').classList.add('error'); valid = false; }
+    if (!valid) return;
+
+    const btn = document.getElementById('submitBtn');
+    btn.disabled = true;
+    btn.textContent = 'Registering…';
+
+    try {
+      const res  = await fetch(`${API_BASE}/register`, {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({
+          event_id:   eventId,
+          first_name: firstName,
+          last_name:  lastName,
+          email,
+          company,
+          phone,
+          audience
+        })
+      });
+
+      const data = await res.json();
+      showResult(data.status);
+    } catch (err) {
+      showResult('ERROR');
+    } finally {
+      btn.disabled    = false;
+      btn.textContent = 'Register';
+    }
+  }
+
+  function showResult(status) {
+    const el    = document.getElementById('regResult');
+    const title = document.getElementById('resultTitle');
+    const body  = document.getElementById('resultBody');
+
+    el.className = 'reg-result';  // reset
+
+    const map = {
+      SUCCESS:           { cls: 'success', t: 'You\'re registered!', b: 'A confirmation email with calendar links has been sent to you.' },
+      ALREADY_REGISTERED:{ cls: 'already', t: 'Already registered',  b: 'Our records show you\'re already registered for this event. Check your inbox for your confirmation email.' },
+      FULL:              { cls: 'full',    t: 'Event is full',        b: 'This event has reached capacity. Contact <a href="mailto:events@josh.ai">events@josh.ai</a> to be added to the waitlist.' },
+      CLOSED:            { cls: 'closed',  t: 'Registration closed',  b: 'The registration deadline has passed. Contact <a href="mailto:events@josh.ai">events@josh.ai</a> if you need assistance.' },
+      ERROR:             { cls: 'error',   t: 'Something went wrong', b: 'Please try again or contact <a href="mailto:events@josh.ai">events@josh.ai</a>.' },
+    };
+
+    const info    = map[status] || map['ERROR'];
+    el.classList.add(info.cls);
+    title.textContent = info.t;
+    body.innerHTML    = info.b;
+    el.style.display  = 'block';
+    el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+
+    if (status === 'SUCCESS') {
+      document.getElementById('regForm').querySelector('button[type=submit]').style.display = 'none';
+    }
+  }
+
+  function esc(str) {
+    return String(str)
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+      .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+  }
+
+  loadEvent();
+</script>
+</body>
+</html>

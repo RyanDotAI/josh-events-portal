@@ -1,0 +1,86 @@
+// FUNCTION: fn_verifyToken
+// Validates a magic link token. If valid, marks it used, creates a 24-hour session token,
+// and returns the session token + contact_id.
+//
+// Returns a map:
+//   { valid: true,  session_token: "...", contact_id: "..." }
+//   { valid: false, error: "invalid_token" | "expired" }
+//
+// Signature: map fn_verifyToken(string p_token)
+//
+// CONFIGURE: YOUR_APP_LINK_NAME, YOUR_ADMIN_EMAIL
+
+map fn_verifyToken(string p_token)
+{
+	APP_NAME    = "YOUR_APP_LINK_NAME";
+	ADMIN_EMAIL = "YOUR_ADMIN_EMAIL";
+
+	result = map();
+
+	if(p_token == null || p_token == "")
+	{
+		result.put("valid", false);
+		result.put("error", "invalid_token");
+		return result;
+	}
+
+	// Look up the magic link token
+	matches = zoho.creator.getRecords(APP_NAME, "Portal_Sessions",
+		"Token == \"" + p_token + "\" && Session_Type == \"magic_link\" && Is_Used == false",
+		1, 1, ADMIN_EMAIL);
+
+	if(matches == null || matches.size() == 0)
+	{
+		result.put("valid", false);
+		result.put("error", "invalid_token");
+		return result;
+	}
+
+	session_rec = matches.get(0);
+	expires_raw = session_rec.get("Expires_At").toString();
+
+	// Parse expiry and compare to now
+	// Creator stores DateTime in "dd-MMM-yyyy HH:mm:ss" format
+	expires_dt = expires_raw.toDateTime("dd-MMM-yyyy HH:mm:ss");
+	now_dt     = zoho.currenttime;
+
+	if(now_dt > expires_dt)
+	{
+		// Mark expired token as used so it can't be retried
+		upd = map();
+		upd.put("Is_Used", true);
+		zoho.creator.updateRecord(APP_NAME, "Portal_Sessions", session_rec.get("ID"), upd, ADMIN_EMAIL);
+
+		result.put("valid", false);
+		result.put("error", "expired");
+		return result;
+	}
+
+	// Mark magic link token as used (one-time)
+	upd = map();
+	upd.put("Is_Used", true);
+	zoho.creator.updateRecord(APP_NAME, "Portal_Sessions", session_rec.get("ID"), upd, ADMIN_EMAIL);
+
+	contact_id = session_rec.get("CRM_Contact_ID").toString();
+	email      = session_rec.get("Email").toString();
+
+	// Create a 24-hour session token for ongoing page navigation
+	raw_session  = contact_id + "|" + zoho.currenttime.getTime().toString() + "|session";
+	session_tok  = zoho.encryption.sha256(raw_session).subString(0, 40);
+	session_exp  = zoho.currenttime.addHours(24);
+
+	sess_data = map();
+	sess_data.put("Token",          session_tok);
+	sess_data.put("Email",          email);
+	sess_data.put("CRM_Contact_ID", contact_id);
+	sess_data.put("Expires_At",     session_exp);
+	sess_data.put("Is_Used",        false);
+	sess_data.put("Session_Type",   "session");
+
+	zoho.creator.createRecord(APP_NAME, "Portal_Sessions", sess_data, ADMIN_EMAIL);
+
+	result.put("valid",         true);
+	result.put("session_token", session_tok);
+	result.put("contact_id",    contact_id);
+	return result;
+}

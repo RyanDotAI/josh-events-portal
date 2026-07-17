@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Events — Josh.ai</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+      background: #f7f7f7;
+      color: #111;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* ── Header ── */
+    .site-header {
+      background: #000;
+      padding: 0 40px;
+      height: 60px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .site-header .logo {
+      color: #fff;
+      font-size: 18px;
+      font-weight: 700;
+      letter-spacing: -0.5px;
+      text-decoration: none;
+    }
+
+    /* ── Page shell ── */
+    .page-hero {
+      background: #000;
+      color: #fff;
+      padding: 48px 40px 40px;
+    }
+    .page-hero h1 {
+      font-size: 32px;
+      font-weight: 700;
+      letter-spacing: -0.8px;
+      margin-bottom: 6px;
+    }
+    .page-hero p {
+      font-size: 15px;
+      color: rgba(255,255,255,0.6);
+    }
+
+    .main {
+      max-width: 1040px;
+      margin: 0 auto;
+      padding: 32px 24px 80px;
+    }
+
+    /* ── Filters ── */
+    .filters {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-bottom: 28px;
+    }
+    .filters select {
+      padding: 8px 14px;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      font-size: 13px;
+      background: #fff;
+      color: #111;
+      cursor: pointer;
+      appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23666' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 10px center;
+      padding-right: 30px;
+    }
+    .filters select:focus { outline: 2px solid #000; outline-offset: 2px; }
+
+    /* ── Event grid ── */
+    .event-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+      gap: 20px;
+    }
+
+    .event-card {
+      background: #fff;
+      border-radius: 10px;
+      padding: 24px;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.07);
+      display: flex;
+      flex-direction: column;
+      transition: box-shadow 0.15s;
+    }
+    .event-card:hover { box-shadow: 0 4px 16px rgba(0,0,0,0.12); }
+
+    .card-badges { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px; }
+    .badge {
+      display: inline-block;
+      padding: 3px 9px;
+      border-radius: 20px;
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .badge-type    { background: #f0edff; color: #4c35a0; }
+    .badge-virtual { background: #e6f7ee; color: #1a7a40; }
+    .badge-inperson{ background: #e8f0ff; color: #1a40a0; }
+    .badge-hybrid  { background: #fff4e6; color: #a06010; }
+
+    .card-title {
+      font-size: 16px;
+      font-weight: 700;
+      color: #111;
+      margin-bottom: 8px;
+      line-height: 1.35;
+    }
+    .card-desc {
+      font-size: 13px;
+      color: #666;
+      line-height: 1.6;
+      margin-bottom: 14px;
+      flex: 1;
+    }
+    .card-meta { margin-bottom: 18px; }
+    .meta-row {
+      display: flex;
+      gap: 8px;
+      align-items: flex-start;
+      font-size: 13px;
+      color: #555;
+      margin-bottom: 4px;
+    }
+    .meta-icon { flex-shrink: 0; width: 16px; }
+
+    .btn {
+      display: inline-block;
+      padding: 10px 20px;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 600;
+      text-decoration: none;
+      text-align: center;
+      cursor: pointer;
+      border: none;
+      transition: opacity 0.15s;
+    }
+    .btn:hover { opacity: 0.85; }
+    .btn-primary { background: #000; color: #fff; }
+    .btn-full { display: block; width: 100%; }
+
+    /* ── States ── */
+    .state-loading, .state-empty, .state-error {
+      text-align: center;
+      padding: 80px 20px;
+      color: #999;
+    }
+    .state-loading .spinner {
+      width: 32px; height: 32px;
+      border: 3px solid #eee;
+      border-top-color: #000;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      margin: 0 auto 16px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .state-empty h3, .state-error h3 { font-size: 18px; color: #444; margin-bottom: 8px; }
+    .state-error h3 { color: #c0392b; }
+
+    @media (max-width: 600px) {
+      .page-hero { padding: 32px 20px; }
+      .page-hero h1 { font-size: 24px; }
+      .main { padding: 24px 16px 60px; }
+    }
+  </style>
+</head>
+<body>
+
+<header class="site-header">
+  <a href="/" class="logo">Josh.ai</a>
+</header>
+
+<div class="page-hero">
+  <h1 id="pageTitle">Upcoming Events</h1>
+  <p id="pageSubtitle">Training, certifications, and product updates</p>
+</div>
+
+<div class="main">
+  <div class="filters" id="filters" style="display:none">
+    <select id="typeFilter" onchange="applyFilters()">
+      <option value="">All Event Types</option>
+    </select>
+    <select id="deliveryFilter" onchange="applyFilters()">
+      <option value="">All Formats</option>
+      <option value="In-Person">In-Person</option>
+      <option value="Virtual">Virtual</option>
+      <option value="Hybrid">Hybrid</option>
+    </select>
+  </div>
+
+  <div id="content">
+    <div class="state-loading">
+      <div class="spinner"></div>
+      <p>Loading events...</p>
+    </div>
+  </div>
+</div>
+
+<script>
+  // ── Configuration ─────────────────────────────────────────
+  // Your backend proxies these requests to Zoho CRM.
+  // See api-spec.md for the required endpoints.
+  const API_BASE = '/api';  // Netlify: '/api'. Front-end team: set to your full backend URL.
+
+  // ── URL params ────────────────────────────────────────────
+  const params       = new URLSearchParams(window.location.search);
+  const audience     = params.get('audience') || '';
+  let   typeFilter   = params.get('type_filter') || '';
+  let   deliveryFilter = params.get('delivery_filter') || '';
+
+  let allEvents = [];
+
+  // ── Page title ────────────────────────────────────────────
+  if (audience) {
+    document.getElementById('pageTitle').textContent = 'Upcoming Events — ' + audience + ' Partners';
+  }
+
+  // ── Fetch events ──────────────────────────────────────────
+  async function loadEvents() {
+    try {
+      const qs = new URLSearchParams({ status: 'Open for Registration' });
+      if (audience) qs.set('audience', audience);
+
+      const res  = await fetch(`${API_BASE}/events?${qs}`);
+      if (!res.ok) throw new Error('API error ' + res.status);
+      const data = await res.json();
+      allEvents  = data.events || [];
+
+      buildTypeFilter();
+      document.getElementById('filters').style.display = allEvents.length ? 'flex' : 'none';
+      renderEvents();
+    } catch (err) {
+      document.getElementById('content').innerHTML = `
+        <div class="state-error">
+          <h3>Unable to load events</h3>
+          <p>Please try again later or contact <a href="mailto:events@josh.ai">events@josh.ai</a>.</p>
+        </div>`;
+    }
+  }
+
+  // ── Build type dropdown from actual event data ─────────────
+  function buildTypeFilter() {
+    const seen  = new Set();
+    const sel   = document.getElementById('typeFilter');
+    allEvents.forEach(ev => {
+      if (ev.type && !seen.has(ev.type)) {
+        seen.add(ev.type);
+        const opt = document.createElement('option');
+        opt.value = ev.type;
+        opt.textContent = ev.type;
+        if (ev.type === typeFilter) opt.selected = true;
+        sel.appendChild(opt);
+      }
+    });
+    if (deliveryFilter) document.getElementById('deliveryFilter').value = deliveryFilter;
+  }
+
+  // ── Filter + render ───────────────────────────────────────
+  function applyFilters() {
+    typeFilter     = document.getElementById('typeFilter').value;
+    deliveryFilter = document.getElementById('deliveryFilter').value;
+    const url = new URL(window.location.href);
+    if (typeFilter)     url.searchParams.set('type_filter', typeFilter);
+    else                url.searchParams.delete('type_filter');
+    if (deliveryFilter) url.searchParams.set('delivery_filter', deliveryFilter);
+    else                url.searchParams.delete('delivery_filter');
+    history.replaceState({}, '', url);
+    renderEvents();
+  }
+
+  function renderEvents() {
+    const today = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+    const filtered = allEvents.filter(ev => {
+      if (typeFilter     && ev.type     !== typeFilter)     return false;
+      if (deliveryFilter && ev.delivery !== deliveryFilter) return false;
+      if (ev.close_date) {
+        const closeNum = ev.close_date.replace(/-/g, '');
+        if (closeNum < today) return false;
+      }
+      return true;
+    });
+
+    if (!filtered.length) {
+      document.getElementById('content').innerHTML = `
+        <div class="state-empty">
+          <h3>No events match your filters</h3>
+          <p>Try removing a filter or check back soon.</p>
+        </div>`;
+      return;
+    }
+
+    const detailBase = window.location.origin + '/events/detail';  // adjust to your URL structure
+
+    const html = `<div class="event-grid">${filtered.map(ev => {
+      const deliveryClass = ev.delivery === 'In-Person' ? 'badge-inperson'
+                          : ev.delivery === 'Hybrid'    ? 'badge-hybrid'
+                          : 'badge-virtual';
+
+      const locLine = ev.delivery === 'Virtual'
+        ? `<div class="meta-row"><span class="meta-icon">💻</span><span>Virtual event</span></div>`
+        : ev.location
+        ? `<div class="meta-row"><span class="meta-icon">📍</span><span>${esc(ev.location)}</span></div>`
+        : '';
+
+      const closeLine = ev.close_date
+        ? `<div class="meta-row"><span class="meta-icon">⏰</span><span>Register by ${esc(ev.close_date)}</span></div>`
+        : '';
+
+      const desc = ev.description
+        ? `<p class="card-desc">${esc(ev.description.length > 160 ? ev.description.slice(0,160) + '…' : ev.description)}</p>`
+        : '';
+
+      const detailUrl = `${detailBase}?event_id=${esc(ev.id)}${audience ? '&audience=' + esc(audience) : ''}`;
+
+      return `
+        <div class="event-card">
+          <div class="card-badges">
+            <span class="badge badge-type">${esc(ev.type || '')}</span>
+            <span class="badge ${deliveryClass}">${esc(ev.delivery || '')}</span>
+          </div>
+          <h3 class="card-title">${esc(ev.name)}</h3>
+          ${desc}
+          <div class="card-meta">
+            <div class="meta-row"><span class="meta-icon">📅</span><span>${esc(ev.start_display || '')}</span></div>
+            ${locLine}
+            ${closeLine}
+          </div>
+          <a href="${detailUrl}" class="btn btn-primary btn-full">View Details &amp; Register</a>
+        </div>`;
+    }).join('')}</div>`;
+
+    document.getElementById('content').innerHTML = html;
+  }
+
+  function esc(str) {
+    return String(str)
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+      .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+  }
+
+  loadEvents();
+</script>
+</body>
+</html>
