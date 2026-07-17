@@ -1,0 +1,115 @@
+// fn_sendCalendarInvite
+// Triggered by Workflow Rule: Event_Registrations → On Create
+// Input Parameter: event_registration_id (String) → mapped to ${Event_Registrations.ID}
+//
+// Creates a Zoho Calendar event and sends a calendar invitation to the registrant.
+// The invite arrives as a standard calendar email (Accept / Decline / Maybe)
+// that adds the event to Google Calendar, Outlook, or Apple Calendar automatically.
+
+// ── 1. Load the registration record ──────────────────────────────────────────
+reg = zoho.crm.getRecordById("Event_Registrations", event_registration_id);
+
+// ── 2. Load the event ────────────────────────────────────────────────────────
+event_lookup = reg.get("Event");
+event_id = event_lookup.get("id");
+ev = zoho.crm.getRecordById("Event_Master", event_id);
+
+ev_name      = ifnull(ev.get("Name"), "Josh.ai Event");
+start_time   = ifnull(ev.get("Start_Time"), "");
+end_time     = ifnull(ev.get("End_Time"), "");
+delivery     = ifnull(ev.get("Delivery_Type"), "");
+vlink        = ifnull(ev.get("Virtual_Meeting_Link"), "");
+
+// ── 3. Get registrant email (Contact takes priority over Lead) ────────────────
+reg_email = "";
+reg_name  = "";
+
+contact_lookup = reg.get("Contact");
+if(contact_lookup != null)
+{
+    contact_id = contact_lookup.get("id");
+    if(contact_id != null && contact_id != "")
+    {
+        person    = zoho.crm.getRecordById("Contacts", contact_id);
+        reg_email = ifnull(person.get("Email"), "");
+        reg_name  = (ifnull(person.get("First_Name"), "") + " " + ifnull(person.get("Last_Name"), "")).trim();
+    }
+}
+
+if(reg_email == "")
+{
+    lead_lookup = reg.get("Lead");
+    if(lead_lookup != null)
+    {
+        lead_id   = lead_lookup.get("id");
+        if(lead_id != null && lead_id != "")
+        {
+            person    = zoho.crm.getRecordById("Leads", lead_id);
+            reg_email = ifnull(person.get("Email"), "");
+            reg_name  = (ifnull(person.get("First_Name"), "") + " " + ifnull(person.get("Last_Name"), "")).trim();
+        }
+    }
+}
+
+if(reg_email == "")
+{
+    return "ERROR: no email address found for registrant";
+}
+
+// ── 4. Build location string ──────────────────────────────────────────────────
+if(delivery == "Virtual")
+{
+    location = vlink != "" ? vlink : "Virtual Event";
+}
+else
+{
+    loc_name   = ifnull(ev.get("Event_Location_Name"), "");
+    loc_street = ifnull(ev.get("Event_Address_Street_Address"), "");
+    loc_city   = ifnull(ev.get("Event_Address_City"), "");
+    loc_state  = ifnull(ev.get("Event_Address_State_Province"), "");
+    loc_zip    = ifnull(ev.get("Event_Address_Zip_Postal_Code"), "");
+
+    loc_parts = list();
+    if(loc_name   != "") { loc_parts.add(loc_name);   }
+    if(loc_street != "") { loc_parts.add(loc_street); }
+    if(loc_city   != "") { loc_parts.add(loc_city);   }
+    if(loc_state  != "") { loc_parts.add(loc_state + (loc_zip != "" ? " " + loc_zip : "")); }
+    location = loc_parts.toString(", ");
+
+    if(delivery == "Hybrid" && vlink != "")
+    {
+        location = location + " | Virtual: " + vlink;
+    }
+}
+
+// ── 5. Build attendee list ────────────────────────────────────────────────────
+attendee = map();
+attendee.put("email", reg_email);
+attendee.put("attendance", 1);  // 1 = Required attendee
+
+attendees = list();
+attendees.add(attendee);
+
+// ── 6. Build calendar event payload ──────────────────────────────────────────
+dateandtime = map();
+dateandtime.put("start", start_time);
+dateandtime.put("end", end_time);
+dateandtime.put("timezone", "America/Denver");
+
+description = "Hi " + reg_name + ",\n\n"
+            + "You are registered for: " + ev_name + "\n\n"
+            + "Questions? Email events@josh.ai";
+
+event_data = map();
+event_data.put("title", ev_name);
+event_data.put("dateandtime", dateandtime);
+event_data.put("attendees", attendees);
+event_data.put("location", location);
+event_data.put("description", description);
+event_data.put("notify_attendee", 2);  // 2 = notify attendees + organizer
+
+// ── 7. Create the calendar event and send the invitation ─────────────────────
+cal_uid  = "0c07e560c52e4fb18aa9b6d653bc42e5";
+response = zoho.calendar.createEvent(cal_uid, event_data);
+
+return response.toString();
