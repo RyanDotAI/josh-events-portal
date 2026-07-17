@@ -1,10 +1,11 @@
-// Proxy: POST /api/register → Zoho Creator fn_registerGuest
+// POST /api/register — full registration via direct Zoho CRM API calls.
+// No dependency on Zoho Creator Functions API.
+//
 // Required env vars: ZOHO_CLIENT_ID, ZOHO_CLIENT_SECRET, ZOHO_REFRESH_TOKEN
-// Optional env vars: ZOHO_ACCOUNTS_URL, ZOHO_CREATOR_ACCOUNT, ZOHO_CREATOR_APP
+// Optional env vars: ZOHO_ACCOUNTS_URL, ZOHO_CRM_URL
 
-const ZOHO_ACCOUNTS      = process.env.ZOHO_ACCOUNTS_URL   || 'https://accounts.zoho.com';
-const ZOHO_CREATOR_ACCT  = process.env.ZOHO_CREATOR_ACCOUNT || 'joshai839';
-const ZOHO_CREATOR_APP   = process.env.ZOHO_CREATOR_APP     || 'josh-ai-event-portal';
+const ZOHO_ACCOUNTS = process.env.ZOHO_ACCOUNTS_URL || 'https://accounts.zoho.com';
+const ZOHO_CRM      = process.env.ZOHO_CRM_URL      || 'https://www.zohoapis.com';
 
 const CORS = {
   'Access-Control-Allow-Origin':  '*',
@@ -29,13 +30,118 @@ async function getToken() {
   return d.access_token;
 }
 
+async function crmGet(path, token) {
+  const res = await fetch(`${ZOHO_CRM}/crm/v6/${path}`, {
+    headers: { Authorization: `Zoho-oauthtoken ${token}` },
+  });
+  return res.json();
+}
+
+async function crmSearch(module, criteria, token) {
+  const d = await crmGet(`${module}/search?criteria=${encodeURIComponent(criteria)}&per_page=10`, token);
+  return d.data || [];
+}
+
+async function crmCreate(module, record, token) {
+  const res = await fetch(`${ZOHO_CRM}/crm/v6/${module}`, {
+    method:  'POST',
+    headers: {
+      Authorization:  `Zoho-oauthtoken ${token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ data: [record] }),
+  });
+  const d = await res.json();
+  return d.data?.[0];
+}
+
+function formatDateTime(dt) {
+  if (!dt) return '';
+  const [datePart, timePart] = dt.split('T');
+  if (!datePart) return '';
+  const time = timePart ? timePart.substring(0, 5) : '';
+  return time ? `${datePart} at ${time}` : datePart;
+}
+
+function buildEmail(ev, registrant_name, p_email) {
+  const ev_name     = ev.Name || '';
+  const ev_delivery = ev.Delivery_Type || '';
+  const ev_start    = ev.Start_Time || '';
+  const ev_end      = ev.End_Time || '';
+  const ev_loc      = ev.Event_Location_Name || '';
+  const ev_building = ev.Event_Address_Flat_House_No_Building_Apartment_Nam || '';
+  const ev_street   = ev.Event_Address_Street_Address || '';
+  const ev_city     = ev.Event_Address_City || '';
+  const ev_state    = ev.Event_Address_State_Province || '';
+  const ev_zip      = ev.Event_Address_Zip_Postal_Code || '';
+  const ev_country  = ev.Event_Address_Country_Region || '';
+  const ev_vlink    = ev.Virtual_Meeting_Link || '';
+
+  // Build display date
+  const display_start = formatDateTime(ev_start);
+
+  // Build calendar URLs
+  let gcal_start = '', gcal_end = '', ol_start = '', ol_end = '';
+  if (ev_start) {
+    const [sd, st] = ev_start.split('T');
+    const s_time   = (st || '').substring(0, 8);
+    const s_hh     = (st || '').substring(0, 5);
+    gcal_start     = sd.replace(/-/g, '') + 'T' + s_time.replace(/:/g, '');
+    ol_start       = sd + 'T' + s_time;
+    if (ev_end) {
+      const [ed, et] = ev_end.split('T');
+      const e_time   = (et || '').substring(0, 8);
+      gcal_end       = ed.replace(/-/g, '') + 'T' + e_time.replace(/:/g, '');
+      ol_end         = ed + 'T' + e_time;
+    }
+  }
+
+  // Build address strings
+  const cityStateZip = [ev_city, ev_state ? (ev_state + (ev_zip ? ' ' + ev_zip : '')) : ev_zip].filter(Boolean).join(', ');
+  const addrParts    = [ev_loc, ev_building, ev_street, cityStateZip, ev_country].filter(Boolean);
+  const addr_full    = ev_delivery === 'Virtual' ? ev_vlink : addrParts.join(', ');
+
+  const name_enc = encodeURIComponent(ev_name);
+  const loc_enc  = encodeURIComponent(addr_full);
+
+  const gcal_url = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${name_enc}&dates=${gcal_start}/${gcal_end}&location=${loc_enc}`;
+  const ol_url   = `https://outlook.live.com/calendar/0/deeplink/compose?rru=addevent&startdt=${ol_start}&enddt=${ol_end}&subject=${name_enc}&location=${loc_enc}`;
+
+  // Build location block for email body
+  let loc_line = '';
+  if (ev_delivery === 'Virtual') {
+    loc_line = `<p>Virtual event. Join link: ${ev_vlink}</p>`;
+  } else {
+    loc_line = `<p><strong>${ev_loc}</strong>`;
+    if (ev_building) loc_line += `<br>${ev_building}`;
+    if (ev_street)   loc_line += `<br>${ev_street}`;
+    if (cityStateZip) loc_line += `<br>${cityStateZip}`;
+    if (ev_country)  loc_line += `<br>${ev_country}`;
+    loc_line += '</p>';
+    if (ev_delivery === 'Hybrid' && ev_vlink) {
+      loc_line += `<p>Virtual link: ${ev_vlink}</p>`;
+    }
+  }
+
+  const html = [
+    "<html><body style='font-family:Arial,sans-serif;padding:20px'>",
+    '<h2>Registration Confirmed</h2>',
+    `<h3>${ev_name}</h3>`,
+    `<p>Hi ${registrant_name},</p>`,
+    '<p>You are registered for this event.</p>',
+    `<p><strong>Date and Time:</strong> ${display_start}</p>`,
+    loc_line,
+    `<p><a href="${gcal_url}">Add to Google Calendar</a> &nbsp; <a href="${ol_url}">Add to Outlook</a></p>`,
+    "<p style='color:#999;font-size:12px'>Questions? Email ryan@josh.ai</p>",
+    '</body></html>',
+  ].join('');
+
+  return { to: p_email, subject: `Registration confirmed: ${ev_name}`, html };
+}
+
 exports.handler = async (event) => {
-  if (event.httpMethod === 'OPTIONS') {
-    return { statusCode: 200, headers: CORS, body: '' };
-  }
-  if (event.httpMethod !== 'POST') {
-    return { statusCode: 405, headers: CORS, body: JSON.stringify({ error: 'Method not allowed' }) };
-  }
+  if (event.httpMethod === 'OPTIONS') return { statusCode: 200, headers: CORS, body: '' };
+  if (event.httpMethod !== 'POST')    return { statusCode: 405, headers: CORS, body: JSON.stringify({ error: 'Method not allowed' }) };
 
   try {
     const body = JSON.parse(event.body || '{}');
@@ -47,41 +153,112 @@ exports.handler = async (event) => {
 
     const token = await getToken();
 
-    const args = JSON.stringify({
-      p_event_id:   event_id,
-      p_first_name: first_name || '',
-      p_last_name:  last_name,
-      p_email:      email,
-      p_company:    company  || '',
-      p_phone:      phone    || '',
-      p_audience:   audience || '',
-    });
+    // ── 1. Fetch event ────────────────────────────────────────
+    const evData = await crmGet(`Event_Master/${event_id}`, token);
+    const ev     = evData.data?.[0];
+    if (!ev) {
+      console.error('Event not found:', event_id);
+      return { statusCode: 200, headers: CORS, body: JSON.stringify({ status: 'ERROR' }) };
+    }
 
-    const fnUrl = `https://creator.zoho.com/api/v2/${ZOHO_CREATOR_ACCT}/${ZOHO_CREATOR_APP}`
-      + `/functions/fn_registerGuest/execute`;
+    const ev_close = ev.Registration_Close_Date || '';
+    const ev_cap   = ev.Capacity ? parseInt(ev.Capacity, 10) : 0;
 
-    const fnRes = await fetch(fnUrl, {
-      method:  'POST',
-      headers: {
-        Authorization:  `Zoho-oauthtoken ${token}`,
-        'Content-Type': 'application/x-www-form-urlencoded',
-      },
-      body: `arguments=${encodeURIComponent(args)}`,
-    });
+    // ── 2. Check registration close date ──────────────────────
+    const today = new Date().toISOString().slice(0, 10);
+    if (ev_close && ev_close < today) {
+      return { statusCode: 200, headers: CORS, body: JSON.stringify({ status: 'CLOSED' }) };
+    }
 
-    const fnData = await fnRes.json();
-    console.log('Creator response:', JSON.stringify(fnData));
+    // ── 3. Find or create Contact / Lead ──────────────────────
+    let registrant_type = '';
+    let registrant_id   = '';
+    let registrant_name = `${first_name || ''} ${last_name}`.trim();
 
-    // Zoho wraps the result: { code: 3000, data: { output: '{"status":"SUCCESS",...}' } }
-    let status = 'ERROR';
-    try {
-      const output = JSON.parse(fnData?.data?.output || '{}');
-      status = output.status || 'ERROR';
-    } catch (_) {}
+    const contacts = await crmSearch('Contacts', `(Email:equals:${email})`, token);
+    if (contacts.length > 0) {
+      registrant_type = 'contact';
+      registrant_id   = contacts[0].id;
+      const fn = contacts[0].First_Name || '';
+      const ln = contacts[0].Last_Name  || '';
+      if (fn || ln) registrant_name = `${fn} ${ln}`.trim();
+    } else {
+      const leads = await crmSearch('Leads', `(Email:equals:${email})`, token);
+      if (leads.length > 0) {
+        registrant_type = 'lead';
+        registrant_id   = leads[0].id;
+      } else {
+        const newLeadResult = await crmCreate('Leads', {
+          First_Name:   first_name || '',
+          Last_Name:    last_name,
+          Email:        email,
+          Company:      company   || '',
+          Phone:        phone     || '',
+          Lead_Source:  'Event Registration',
+          Lead_Status:  'Not Contacted',
+          Lead_Type:    audience  || '',
+          Description:  `Registered for: ${ev.Name || ''}`,
+        }, token);
 
-    return { statusCode: 200, headers: CORS, body: JSON.stringify({ status }) };
+        const newId = newLeadResult?.details?.id;
+        if (!newId) {
+          console.error('Lead creation failed:', JSON.stringify(newLeadResult));
+          return { statusCode: 200, headers: CORS, body: JSON.stringify({ status: 'ERROR' }) };
+        }
+        registrant_type = 'lead';
+        registrant_id   = newId;
+      }
+    }
+
+    // ── 4. Duplicate check ────────────────────────────────────
+    const dupField = registrant_type === 'contact' ? 'Contact' : 'Lead';
+    const dupRegs  = await crmSearch(
+      'Event_Registrations',
+      `((${dupField}:equals:${registrant_id})AND(Event:equals:${event_id}))`,
+      token
+    );
+    if (dupRegs.some(r => r.Status !== 'Cancelled')) {
+      return { statusCode: 200, headers: CORS, body: JSON.stringify({ status: 'ALREADY_REGISTERED' }) };
+    }
+
+    // ── 5. Capacity check ─────────────────────────────────────
+    if (ev_cap > 0) {
+      const allRegs = await crmSearch(
+        'Event_Registrations',
+        `((Event:equals:${event_id})AND(Status:not_equal:Cancelled))`,
+        token
+      );
+      if (allRegs.length >= ev_cap) {
+        return { statusCode: 200, headers: CORS, body: JSON.stringify({ status: 'FULL' }) };
+      }
+    }
+
+    // ── 6. Create Event_Registration ──────────────────────────
+    const regData = {
+      Name:              `${registrant_name} - ${ev.Name || ''}`,
+      Event:             event_id,
+      Registration_Date: new Date().toISOString().slice(0, 19).replace('T', ' '),
+      Status:            'Registered',
+      Registration_Source: 'Portal',
+    };
+    if (registrant_type === 'contact') regData.Contact = registrant_id;
+    else                                regData.Lead    = registrant_id;
+
+    const newReg   = await crmCreate('Event_Registrations', regData, token);
+    const newRegId = newReg?.details?.id;
+    if (!newRegId) {
+      console.error('Registration creation failed:', JSON.stringify(newReg));
+      return { statusCode: 200, headers: CORS, body: JSON.stringify({ status: 'ERROR' }) };
+    }
+
+    // Email confirmation is handled by a Zoho CRM Workflow Rule
+    // (Setup → Automation → Workflow Rules → Event_Registrations → On Create → Send Email)
+    console.log('Registration created:', newRegId, 'for', email);
+
+    return { statusCode: 200, headers: CORS, body: JSON.stringify({ status: 'SUCCESS' }) };
+
   } catch (err) {
-    console.error('register function error:', err.message);
+    console.error('Registration error:', err.message);
     return { statusCode: 500, headers: CORS, body: JSON.stringify({ status: 'ERROR' }) };
   }
 };
