@@ -31,6 +31,8 @@ async function getToken() {
 }
 
 async function safeJson(res) {
+  // Zoho CRM returns 204 No Content (empty body) when a search finds no records.
+  if (res.status === 204) return { data: [] };
   const text = await res.text();
   if (!text || !text.trim()) {
     throw new Error(`Empty response from Zoho (HTTP ${res.status}) — check OAuth scopes`);
@@ -46,7 +48,16 @@ async function crmGet(path, token) {
 }
 
 async function crmSearch(module, criteria, token) {
+  const d = await crmGet(`${module}/search?criteria=${encodeURIComponent(criteria)}&per_page=10`, token);
+  return d.data || [];
+}
 
+async function crmCreate(module, record, token) {
+  const res = await fetch(`${ZOHO_CRM}/crm/v6/${module}`, {
+    method:  'POST',
+    headers: {
+      Authorization:  `Zoho-oauthtoken ${token}`,
+      'Content-Type': 'application/json',
     },
     body: JSON.stringify({ data: [record] }),
   });
@@ -150,15 +161,18 @@ exports.handler = async (event) => {
       return { statusCode: 400, headers: CORS, body: JSON.stringify({ status: 'ERROR' }) };
     }
 
+    console.log('REGISTER START — event_id:', event_id, 'email:', email);
     const token = await getToken();
+    console.log('REGISTER — token obtained');
 
     // ── 1. Fetch event ────────────────────────────────────────
     const evData = await crmGet(`Event_Master/${event_id}`, token);
     const ev     = evData.data?.[0];
     if (!ev) {
-      console.error('Event not found:', event_id);
+      console.error('REGISTER — event not found:', event_id);
       return { statusCode: 200, headers: CORS, body: JSON.stringify({ status: 'ERROR' }) };
     }
+    console.log('REGISTER — event found:', ev.Name);
 
     const ev_close = ev.Registration_Close_Date || '';
     const ev_cap   = ev.Capacity ? parseInt(ev.Capacity, 10) : 0;
@@ -166,6 +180,7 @@ exports.handler = async (event) => {
     // ── 2. Check registration close date ──────────────────────
     const today = new Date().toISOString().slice(0, 10);
     if (ev_close && ev_close < today) {
+      console.log('REGISTER — closed:', ev_close);
       return { statusCode: 200, headers: CORS, body: JSON.stringify({ status: 'CLOSED' }) };
     }
 
@@ -181,12 +196,15 @@ exports.handler = async (event) => {
       const fn = contacts[0].First_Name || '';
       const ln = contacts[0].Last_Name  || '';
       if (fn || ln) registrant_name = `${fn} ${ln}`.trim();
+      console.log('REGISTER — found Contact:', registrant_id);
     } else {
       const leads = await crmSearch('Leads', `(Email:equals:${email})`, token);
       if (leads.length > 0) {
         registrant_type = 'lead';
         registrant_id   = leads[0].id;
+        console.log('REGISTER — found Lead:', registrant_id);
       } else {
+        console.log('REGISTER — creating new Lead for:', email);
         const newLeadResult = await crmCreate('Leads', {
           First_Name:   first_name || '',
           Last_Name:    last_name,
@@ -199,13 +217,15 @@ exports.handler = async (event) => {
           Description:  `Registered for: ${ev.Name || ''}`,
         }, token);
 
+        console.log('REGISTER — Lead create result:', JSON.stringify(newLeadResult));
         const newId = newLeadResult?.details?.id;
         if (!newId) {
-          console.error('Lead creation failed:', JSON.stringify(newLeadResult));
+          console.error('REGISTER — Lead creation failed:', JSON.stringify(newLeadResult));
           return { statusCode: 200, headers: CORS, body: JSON.stringify({ status: 'ERROR' }) };
         }
         registrant_type = 'lead';
         registrant_id   = newId;
+        console.log('REGISTER — new Lead id:', registrant_id);
       }
     }
 
@@ -217,6 +237,7 @@ exports.handler = async (event) => {
       token
     );
     if (dupRegs.some(r => r.Status !== 'Cancelled')) {
+      console.log('REGISTER — already registered');
       return { statusCode: 200, headers: CORS, body: JSON.stringify({ status: 'ALREADY_REGISTERED' }) };
     }
 
@@ -228,20 +249,22 @@ exports.handler = async (event) => {
         token
       );
       if (allRegs.length >= ev_cap) {
+        console.log('REGISTER — event full:', allRegs.length, '/', ev_cap);
         return { statusCode: 200, headers: CORS, body: JSON.stringify({ status: 'FULL' }) };
       }
     }
 
     // ── 6. Create Event_Registration ──────────────────────────
+    // Lookup fields MUST be passed as {id: "..."} objects, not plain strings.
     const regData = {
       Name:              `${registrant_name} - ${ev.Name || ''}`,
-      Event:             event_id,
-      Registration_Date: new Date().toISOString().slice(0, 19).replace('T', ' '),
+      Event:             { id: event_id },
+      Registration_Date: new Date().toISOString(),
       Status:            'Registered',
       Registration_Source: 'Portal',
     };
-    if (registrant_type === 'contact') regData.Contact = registrant_id;
-    else                                regData.Lead    = registrant_id;
+    if (registrant_type === 'contact') regData.Contact = { id: registrant_id };
+    else                                regData.Lead    = { id: registrant_id };
 
     const newReg   = await crmCreate('Event_Registrations', regData, token);
     const newRegId = newReg?.details?.id;
