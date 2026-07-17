@@ -58,7 +58,7 @@ exports.handler = async (event) => {
     });
 
     const fnUrl = `https://creator.zoho.com/api/v2/${ZOHO_CREATOR_ACCT}/${ZOHO_CREATOR_APP}`
-      + `/functions/fn_registerGuest/execute?environment=production`;
+      + `/functions/fn_registerGuest/execute`;
 
     const fnRes = await fetch(fnUrl, {
       method:  'POST',
