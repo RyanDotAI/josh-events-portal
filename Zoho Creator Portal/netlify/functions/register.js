@@ -121,6 +121,41 @@ function to12h(hourStr) {
   return { h12, ampm };
 }
 
+// Convert a local event time (in a named IANA timezone) to a UTC Date object.
+// Uses Node's built-in Intl API — no timezone library needed.
+function localToUtcDate(year, month, day, hour, min, sec, tzIana) {
+  // Treat the local time as if it were UTC to get a reference point
+  const fakeUtc = new Date(Date.UTC(
+    parseInt(year), parseInt(month) - 1, parseInt(day),
+    parseInt(hour), parseInt(min), parseInt(sec)
+  ));
+  // Format that reference point in the target timezone to see the local offset
+  const fmt = new Intl.DateTimeFormat('en-US', {
+    timeZone: tzIana,
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', second: '2-digit',
+    hour12: false,
+  });
+  const parts = {};
+  fmt.formatToParts(fakeUtc).forEach(p => { if (p.type !== 'literal') parts[p.type] = p.value; });
+  const tzHour = parseInt(parts.hour, 10) % 24;
+  const offsetMs = fakeUtc.getTime() - Date.UTC(
+    parseInt(parts.year), parseInt(parts.month) - 1, parseInt(parts.day),
+    tzHour, parseInt(parts.minute), parseInt(parts.second)
+  );
+  return new Date(fakeUtc.getTime() + offsetMs);
+}
+
+// Format a UTC Date as "YYYYMMDDTHHmmssZ" for Google Calendar URLs.
+function toGcalUtc(date) {
+  return date.toISOString().replace(/[-:]/g, '').slice(0, 15) + 'Z';
+}
+
+// Format a UTC Date as "YYYY-MM-DDTHH:MM:SSZ" for Outlook URLs.
+function toOlUtc(date) {
+  return date.toISOString().slice(0, 19) + 'Z';
+}
+
 // ── Email builder ─────────────────────────────────────────────────────────────
 
 function buildEmailContent(ev, registrant_name, reg_email) {
@@ -129,6 +164,7 @@ function buildEmailContent(ev, registrant_name, reg_email) {
   const ev_vlink    = ev.Virtual_Meeting_Link || '';
   const tz_raw      = ev.Event_Timezone || '';
   const tz_label    = TZ_LABEL[tz_raw] || 'MT';
+  const tz_iana     = TZ_IANA[tz_raw]  || 'America/Denver';
 
   // Address parts
   const loc_name    = ev.Event_Location_Name || '';
@@ -157,14 +193,18 @@ function buildEmailContent(ev, registrant_name, reg_email) {
     const monthName = MONTH_NAMES[parseInt(start.month, 10)] || start.month;
     display_date = `${monthName} ${start.day}, ${start.year}`;
 
-    const endParts = end || start;
+    // For display: keep local time as-is
+    const endParts = end || { ...start, hour: String(parseInt(start.hour, 10) + 1).padStart(2, '0') };
     const { h12: eh, ampm: ea } = to12h(endParts.hour);
     display_time = `${sh}:${start.min} ${sa} – ${eh}:${endParts.min} ${ea} ${tz_label}`;
 
-    gcal_start = `${start.year}${start.month}${start.day}T${start.hour}${start.min}${start.sec}`;
-    gcal_end   = `${endParts.year}${endParts.month}${endParts.day}T${endParts.hour}${endParts.min}${endParts.sec}`;
-    ol_start   = `${start.year}-${start.month}-${start.day}T${start.hour}:${start.min}:${start.sec}`;
-    ol_end     = `${endParts.year}-${endParts.month}-${endParts.day}T${endParts.hour}:${endParts.min}:${endParts.sec}`;
+    // For calendar links: convert to UTC so the time is correct for any viewer's timezone
+    const startUtc = localToUtcDate(start.year, start.month, start.day, start.hour, start.min, start.sec, tz_iana);
+    const endUtc   = localToUtcDate(endParts.year, endParts.month, endParts.day, endParts.hour, endParts.min, endParts.sec, tz_iana);
+    gcal_start = toGcalUtc(startUtc);
+    gcal_end   = toGcalUtc(endUtc);
+    ol_start   = toOlUtc(startUtc);
+    ol_end     = toOlUtc(endUtc);
   }
 
   // Location for calendar URLs
