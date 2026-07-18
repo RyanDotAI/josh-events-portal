@@ -276,7 +276,7 @@
             <div class="meta-value">${esc(ev.start_display || 'TBD')}${ev.end_display ? ' – ' + esc(ev.end_display) : ''}${ev.timezone ? ' ' + esc(ev.timezone) : ''}</div>
           </div>
           ${locationHtml}
-          ${ev.close_date ? `<div class="meta-item"><label>Register By</label><div class="meta-value">${esc(ev.close_date)}</div></div>` : ''}
+          ${ev.close_date ? `<div class="meta-item"><label>Register By</label><div class="meta-value">${esc(fmtDate(ev.close_date))}</div></div>` : ''}
           ${ev.capacity ? `<div class="meta-item"><label>Capacity</label><div class="meta-value">${esc(String(ev.capacity))} attendees</div></div>` : ''}
         </div>
         ${descHtml}
@@ -428,6 +428,11 @@
     return String(str)
       .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
       .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+  }
+
+  function fmtDate(str) {
+    const [y, m, d] = (str || '').split('-');
+    return y && m && d ? `${m}-${d}-${y}` : str;
   }
 
   loadEvent();

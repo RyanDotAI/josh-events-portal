@@ -315,7 +315,7 @@
         : '';
 
       const closeLine = ev.close_date
-        ? `<div class="meta-row"><span class="meta-icon">⏰</span><span>Register by ${esc(ev.close_date)}</span></div>`
+        ? `<div class="meta-row"><span class="meta-icon">⏰</span><span>Register by ${esc(fmtDate(ev.close_date))}</span></div>`
         : '';
 
       const desc = ev.description
@@ -350,6 +350,11 @@
     return String(str)
       .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
       .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+  }
+
+  function fmtDate(str) {
+    const [y, m, d] = (str || '').split('-');
+    return y && m && d ? `${m}-${d}-${y}` : str;
   }
 
   loadEvents();
