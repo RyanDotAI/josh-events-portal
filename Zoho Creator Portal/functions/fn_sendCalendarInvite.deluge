@@ -18,12 +18,35 @@ ev_lookup = reg.get("Event");
 ev_id     = ev_lookup.get("id");
 ev        = zoho.crm.getRecordById("Event_Master", ev_id);
 
-ev_name   = ifnull(ev.get("Name"), "Josh.ai Event");
+ev_name  = ifnull(ev.get("Name"), "Josh.ai Event");
 start_raw = ifnull(ev.get("Start_Time"), "").toString();
 end_raw   = ifnull(ev.get("End_Time"), "").toString();
 delivery  = ifnull(ev.get("Delivery_Type"), "");
 vlink     = ifnull(ev.get("Virtual_Meeting_Link"), "");
-tz_name   = ifnull(ev.get("Timezone"), "America/Denver");
+tz_raw    = ifnull(ev.get("Event_Timezone"), "Mountain Time (MT) - (US & Canada)");
+
+// Map Event_Timezone picklist values → IANA name (for calendar API) and short label (for email)
+tz_iana_map = map();
+tz_iana_map.put("Pacific Time (PT) - (US & Canada)",   "America/Los_Angeles");
+tz_iana_map.put("Mountain Time (MT) - (US & Canada)",  "America/Denver");
+tz_iana_map.put("Central Time (CT) - (US & Canada)",   "America/Chicago");
+tz_iana_map.put("Eastern Time (ET) - (US & Canada)",   "America/New_York");
+tz_iana_map.put("Alaska Time (AKT)",                   "America/Anchorage");
+tz_iana_map.put("Hawaii-Aleutian Time (HST): UTC-10",  "Pacific/Honolulu");
+tz_iana_map.put("Atlantic Time (AT) - (Canada)",       "America/Halifax");
+tz_iana_map.put("Newfoundland (NT) - (Canada)",        "America/St_Johns");
+tz_name = ifnull(tz_iana_map.get(tz_raw), "America/Denver");
+
+tz_label_map = map();
+tz_label_map.put("Pacific Time (PT) - (US & Canada)",  "PT");
+tz_label_map.put("Mountain Time (MT) - (US & Canada)", "MT");
+tz_label_map.put("Central Time (CT) - (US & Canada)",  "CT");
+tz_label_map.put("Eastern Time (ET) - (US & Canada)",  "ET");
+tz_label_map.put("Alaska Time (AKT)",                  "AKT");
+tz_label_map.put("Hawaii-Aleutian Time (HST): UTC-10", "HST");
+tz_label_map.put("Atlantic Time (AT) - (Canada)",      "AT");
+tz_label_map.put("Newfoundland (NT) - (Canada)",       "NT");
+tz_label = ifnull(tz_label_map.get(tz_raw), "MT");
 
 // ── 2. Load registrant (Contact takes priority, Lead as fallback) ─────────────
 reg_email = "";
@@ -121,16 +144,6 @@ e_ampm = e_h >= 12 ? "PM" : "AM";
 if(e_h > 12) { e_h = e_h - 12; }
 if(e_h == 0) { e_h = 12; }
 e_h12 = e_h.toString();
-
-// Timezone short label for email display
-tz_map = map();
-tz_map.put("America/New_York",    "ET");
-tz_map.put("America/Chicago",     "CT");
-tz_map.put("America/Denver",      "MT");
-tz_map.put("America/Los_Angeles", "PT");
-tz_map.put("America/Phoenix",     "MST");
-tz_map.put("UTC",                 "UTC");
-tz_label = ifnull(tz_map.get(tz_name), tz_name);
 
 display_date  = month_map.get(s_month) + " " + s_day + ", " + s_year;
 display_start = s_h12 + ":" + s_min + " " + s_ampm;
