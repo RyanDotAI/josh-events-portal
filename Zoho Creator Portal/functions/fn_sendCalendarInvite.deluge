@@ -13,7 +13,7 @@ string automation.fn_sendCalendarInvite(string event_registration_id)
 	vlink     = ifnull(ev.get("Virtual_Meeting_Link"), "");
 	tz_raw    = ifnull(ev.get("Event_Timezone"), "Mountain Time (MT) - (US & Canada)");
 
-	// Map Event_Timezone picklist → IANA name (calendar API) and short label (email)
+	// Map Event_Timezone picklist → IANA name (for calendar) and short label (for email)
 	tz_iana_map = map();
 	tz_iana_map.put("Pacific Time (PT) - (US & Canada)",  "America/Los_Angeles");
 	tz_iana_map.put("Mountain Time (MT) - (US & Canada)", "America/Denver");
@@ -72,9 +72,11 @@ string automation.fn_sendCalendarInvite(string event_registration_id)
 	{
 		return "ERROR: no email found for registration " + event_registration_id;
 	}
-	reg_name = (reg_first + " " + reg_last).trim();
+	reg_name_raw = reg_first + " " + reg_last;
+	reg_name     = reg_name_raw.trim();
 
 	// ── 3. Parse datetime strings ─────────────────────────────────────────────────
+	// CRM returns DateTime as "YYYY-MM-DD HH:MM:SS". Normalize any T-separator variant.
 	start_clean = start_raw.replaceAll("T", " ");
 	if(start_clean.length() > 19)
 	{
@@ -122,10 +124,12 @@ string automation.fn_sendCalendarInvite(string event_registration_id)
 	}
 
 	month_map = map();
-	month_map.put("01","January");  month_map.put("02","February"); month_map.put("03","March");
-	month_map.put("04","April");    month_map.put("05","May");      month_map.put("06","June");
-	month_map.put("07","July");     month_map.put("08","August");   month_map.put("09","September");
-	month_map.put("10","October");  month_map.put("11","November"); month_map.put("12","December");
+	month_map.put("01", "January");   month_map.put("02", "February");
+	month_map.put("03", "March");     month_map.put("04", "April");
+	month_map.put("05", "May");       month_map.put("06", "June");
+	month_map.put("07", "July");      month_map.put("08", "August");
+	month_map.put("09", "September"); month_map.put("10", "October");
+	month_map.put("11", "November");  month_map.put("12", "December");
 
 	// Convert start to 12-hour
 	s_h = s_hour.toLong();
@@ -156,7 +160,7 @@ string automation.fn_sendCalendarInvite(string event_registration_id)
 	display_date = month_map.get(s_month) + " " + s_day + ", " + s_year;
 	display_time = s_h.toString() + ":" + s_min + " " + s_ampm + " - " + e_h.toString() + ":" + e_min + " " + e_ampm + " " + tz_label;
 
-	// ── 4. Build location strings ─────────────────────────────────────────────────
+	// ── 4. Build location strings (manual concatenation — no list.toString separator) ──
 	loc_name    = ifnull(ev.get("Event_Location_Name"), "");
 	loc_bldg    = ifnull(ev.get("Event_Address_Flat_House_No_Building_Apartment_Nam"), "");
 	loc_street  = ifnull(ev.get("Event_Address_Street_Address"), "");
@@ -186,32 +190,49 @@ string automation.fn_sendCalendarInvite(string event_registration_id)
 		city_state_zip = loc_state;
 	}
 
-	addr_parts = list();
-	if(loc_name != "")       { addr_parts.add(loc_name); }
-	if(loc_bldg != "")       { addr_parts.add(loc_bldg); }
-	if(loc_street != "")     { addr_parts.add(loc_street); }
-	if(city_state_zip != "") { addr_parts.add(city_state_zip); }
-	if(loc_country != "")    { addr_parts.add(loc_country); }
-	full_address = addr_parts.toString(", ");
+	full_address = "";
+	if(loc_name != "")
+	{
+		full_address = loc_name;
+	}
+	if(loc_bldg != "")
+	{
+		if(full_address != "") { full_address = full_address + ", "; }
+		full_address = full_address + loc_bldg;
+	}
+	if(loc_street != "")
+	{
+		if(full_address != "") { full_address = full_address + ", "; }
+		full_address = full_address + loc_street;
+	}
+	if(city_state_zip != "")
+	{
+		if(full_address != "") { full_address = full_address + ", "; }
+		full_address = full_address + city_state_zip;
+	}
+	if(loc_country != "")
+	{
+		if(full_address != "") { full_address = full_address + ", "; }
+		full_address = full_address + loc_country;
+	}
 
-	// Build plain-text location (for calendar) and HTML location (for email)
 	location_cal  = "";
 	location_html = "";
 	loc_label     = "Location";
 
 	if(delivery == "Virtual")
 	{
-		loc_label    = "Join Link";
-		location_cal = vlink;
+		loc_label     = "Join Link";
+		location_cal  = vlink;
 		location_html = "<strong>Virtual Event</strong>";
 		if(vlink != "")
 		{
-			location_html = location_html + "<br><a href='" + vlink + "' style='color:#0070c0'>" + vlink + "</a>";
+			location_html = location_html + "<br><a href='" + vlink + "'>" + vlink + "</a>";
 		}
 	}
 	else if(delivery == "Hybrid")
 	{
-		location_cal  = full_address;
+		location_cal = full_address;
 		if(vlink != "")
 		{
 			location_cal = location_cal + " | Join: " + vlink;
@@ -223,7 +244,7 @@ string automation.fn_sendCalendarInvite(string event_registration_id)
 		if(loc_country != "")    { location_html = location_html + "<br>" + loc_country; }
 		if(vlink != "")
 		{
-			location_html = location_html + "<br><br><strong>Virtual Link:</strong> <a href='" + vlink + "' style='color:#0070c0'>" + vlink + "</a>";
+			location_html = location_html + "<br><br><strong>Virtual Link:</strong> <a href='" + vlink + "'>" + vlink + "</a>";
 		}
 	}
 	else
@@ -237,12 +258,14 @@ string automation.fn_sendCalendarInvite(string event_registration_id)
 	}
 
 	// ── 5. Build Add to Calendar URLs ─────────────────────────────────────────────
+	// Google Calendar uses compact format: YYYYMMDDTHHMMSS
 	gcal_start = s_year + s_month + s_day + "T" + s_hour + s_min + "00";
 	gcal_end   = e_year + e_month + e_day + "T" + e_hour + e_min + "00";
 	gcal_title = ev_name.replaceAll(" ", "%20").replaceAll("&", "%26");
 	gcal_loc   = location_cal.replaceAll(" ", "%20").replaceAll("&", "%26");
 	gcal_url   = "https://calendar.google.com/calendar/render?action=TEMPLATE&text=" + gcal_title + "&dates=" + gcal_start + "/" + gcal_end + "&location=" + gcal_loc;
 
+	// Outlook uses YYYY-MM-DDTHH:MM:SS
 	ol_start = s_year + "-" + s_month + "-" + s_day + "T" + s_hour + ":" + s_min + ":00";
 	ol_end   = e_year + "-" + e_month + "-" + e_day + "T" + e_hour + ":" + e_min + ":00";
 	ol_title = ev_name.replaceAll(" ", "%20").replaceAll("&", "%26");
@@ -259,56 +282,72 @@ string automation.fn_sendCalendarInvite(string event_registration_id)
 		greeting = "Hello,";
 	}
 
-	html  = "<!DOCTYPE html><html><body style='margin:0;padding:0;background:#f5f5f5;font-family:Arial,Helvetica,sans-serif'>";
-	html += "<div style='max-width:600px;margin:0 auto;background:#fff'>";
-	html += "<div style='background:#000;padding:20px 32px'><p style='color:#fff;font-size:18px;font-weight:700;margin:0'>Josh.ai</p></div>";
-	html += "<div style='background:#111;padding:32px'>";
-	html += "<h1 style='color:#fff;font-size:24px;font-weight:700;margin:0 0 6px'>You're Registered!</h1>";
-	html += "<p style='color:rgba(255,255,255,0.65);font-size:15px;margin:0'>" + ev_name + "</p>";
+	html  = "<!DOCTYPE html><html><body style='margin:0;padding:0;background:#f5f5f5;font-family:Arial,sans-serif'>";
+	html += "<div style='max-width:600px;margin:0 auto;background:#ffffff'>";
+	html += "<div style='background:#000000;padding:20px 32px'>";
+	html += "<p style='color:#ffffff;font-size:18px;font-weight:bold;margin:0'>Josh.ai</p>";
+	html += "</div>";
+	html += "<div style='background:#111111;padding:32px'>";
+	html += "<h1 style='color:#ffffff;font-size:24px;margin:0 0 8px'>You're Registered!</h1>";
+	html += "<p style='color:#aaaaaa;font-size:15px;margin:0'>" + ev_name + "</p>";
 	html += "</div>";
 	html += "<div style='padding:32px'>";
-	html += "<p style='margin:0 0 24px;color:#333;font-size:15px;line-height:1.6'>" + greeting + "<br><br>Your spot is confirmed. Here are your event details:</p>";
+	html += "<p style='color:#333333;font-size:15px;line-height:1.6;margin:0 0 24px'>" + greeting + "<br><br>Your spot is confirmed. Here are your event details:</p>";
 	html += "<table style='width:100%;border-collapse:collapse;margin-bottom:28px'>";
-	html += "<tr style='border-top:1px solid #eee'><td style='padding:13px 0;color:#888;font-size:12px;font-weight:700;letter-spacing:0.5px;text-transform:uppercase;width:100px;vertical-align:top'>Event</td><td style='padding:13px 0;color:#111;font-size:15px;font-weight:600'>" + ev_name + "</td></tr>";
-	html += "<tr style='border-top:1px solid #eee'><td style='padding:13px 0;color:#888;font-size:12px;font-weight:700;letter-spacing:0.5px;text-transform:uppercase;vertical-align:top'>Date</td><td style='padding:13px 0;color:#111;font-size:15px'>" + display_date + "</td></tr>";
-	html += "<tr style='border-top:1px solid #eee'><td style='padding:13px 0;color:#888;font-size:12px;font-weight:700;letter-spacing:0.5px;text-transform:uppercase;vertical-align:top'>Time</td><td style='padding:13px 0;color:#111;font-size:15px'>" + display_time + "</td></tr>";
-	html += "<tr style='border-top:1px solid #eee;border-bottom:1px solid #eee'><td style='padding:13px 0;color:#888;font-size:12px;font-weight:700;letter-spacing:0.5px;text-transform:uppercase;vertical-align:top'>" + loc_label + "</td><td style='padding:13px 0;color:#111;font-size:15px;line-height:1.6'>" + location_html + "</td></tr>";
+	html += "<tr style='border-top:1px solid #eeeeee'>";
+	html += "<td style='padding:12px 0;color:#888888;font-size:12px;font-weight:bold;width:90px;vertical-align:top'>EVENT</td>";
+	html += "<td style='padding:12px 0;color:#111111;font-size:15px;font-weight:bold'>" + ev_name + "</td>";
+	html += "</tr>";
+	html += "<tr style='border-top:1px solid #eeeeee'>";
+	html += "<td style='padding:12px 0;color:#888888;font-size:12px;font-weight:bold;vertical-align:top'>DATE</td>";
+	html += "<td style='padding:12px 0;color:#111111;font-size:15px'>" + display_date + "</td>";
+	html += "</tr>";
+	html += "<tr style='border-top:1px solid #eeeeee'>";
+	html += "<td style='padding:12px 0;color:#888888;font-size:12px;font-weight:bold;vertical-align:top'>TIME</td>";
+	html += "<td style='padding:12px 0;color:#111111;font-size:15px'>" + display_time + "</td>";
+	html += "</tr>";
+	html += "<tr style='border-top:1px solid #eeeeee;border-bottom:1px solid #eeeeee'>";
+	html += "<td style='padding:12px 0;color:#888888;font-size:12px;font-weight:bold;vertical-align:top'>" + loc_label.toUpperCase() + "</td>";
+	html += "<td style='padding:12px 0;color:#111111;font-size:15px;line-height:1.6'>" + location_html + "</td>";
+	html += "</tr>";
 	html += "</table>";
-	html += "<p style='margin:0 0 14px;color:#555;font-size:14px;font-weight:600'>Add to your calendar:</p>";
-	html += "<table><tr>";
-	html += "<td style='padding-right:10px'><a href='" + gcal_url + "' style='display:inline-block;background:#000;color:#fff;padding:11px 22px;text-decoration:none;border-radius:5px;font-size:13px;font-weight:600'>Google Calendar</a></td>";
-	html += "<td><a href='" + ol_url + "' style='display:inline-block;background:#0078d4;color:#fff;padding:11px 22px;text-decoration:none;border-radius:5px;font-size:13px;font-weight:600'>Outlook Calendar</a></td>";
-	html += "</tr></table>";
+	html += "<p style='color:#555555;font-size:14px;font-weight:bold;margin:0 0 12px'>Add to your calendar:</p>";
+	html += "<a href='" + gcal_url + "' style='display:inline-block;background:#000000;color:#ffffff;padding:10px 20px;text-decoration:none;border-radius:4px;font-size:13px;font-weight:bold;margin-right:10px'>Google Calendar</a>";
+	html += "<a href='" + ol_url + "' style='display:inline-block;background:#0078d4;color:#ffffff;padding:10px 20px;text-decoration:none;border-radius:4px;font-size:13px;font-weight:bold'>Outlook Calendar</a>";
 	html += "</div>";
-	html += "<div style='border-top:1px solid #eee;padding:20px 32px;text-align:center'><p style='color:#aaa;font-size:12px;margin:0'>Questions? Email <a href='mailto:sales@josh.ai' style='color:#666;text-decoration:none'>sales@josh.ai</a></p></div>";
+	html += "<div style='border-top:1px solid #eeeeee;padding:20px 32px;text-align:center'>";
+	html += "<p style='color:#aaaaaa;font-size:12px;margin:0'>Questions? Email sales@josh.ai</p>";
+	html += "</div>";
 	html += "</div></body></html>";
 
-	// ── 7. Send confirmation email ────────────────────────────────────────────────
-	mail_map = map();
-	mail_map.put("fromAddress", "sales@josh.ai");
-	mail_map.put("toAddress", reg_email);
-	mail_map.put("subject", "Registration Confirmed: " + ev_name);
-	mail_map.put("content", html);
-	mail_map.put("mailFormat", "html");
-	mail_result = zoho.mail.sendMail(mail_map);
+	// ── 7. Send confirmation email (sendmail[] bracket syntax required in CRM Deluge) ──
+	sendmail
+	[
+		from : "sales@josh.ai"
+		to : reg_email
+		subject : "Registration Confirmed: " + ev_name
+		message : html
+		content type : "html"
+	]
 
 	// ── 8. Create Zoho Calendar event + send invite ───────────────────────────────
-	// notify_attendee: 2 sends Accept/Decline/Maybe invite to the attendee.
-	cal_description = "You are registered for: " + ev_name + "\nDate: " + display_date + "\nTime: " + display_time + "\nLocation: " + location_cal + "\n\nQuestions? Email sales@josh.ai";
-
-	attendee = map();
-	attendee.put("email", reg_email);
-	attendee.put("attendance", 1);
-	attendees = list();
-	attendees.add(attendee);
-
-	cal_start = s_year + "-" + s_month + "-" + s_day + "T" + s_hour + ":" + s_min + ":00";
-	cal_end   = e_year + "-" + e_month + "-" + e_day + "T" + e_hour + ":" + e_min + ":00";
+	// Requires a Zoho Calendar connection named "zoho_calendar" configured in
+	// CRM > Setup > Connections before this function will work.
+	// dateandtime uses compact ISO 8601: YYYYMMDDTHHMMSS (no dashes or colons)
+	cal_start = s_year + s_month + s_day + "T" + s_hour + s_min + "00";
+	cal_end   = e_year + e_month + e_day + "T" + e_hour + e_min + "00";
 
 	dateandtime = map();
 	dateandtime.put("start",    cal_start);
 	dateandtime.put("end",      cal_end);
 	dateandtime.put("timezone", tz_name);
+
+	attendee = map();
+	attendee.put("email", reg_email);
+	attendees = list();
+	attendees.add(attendee);
+
+	cal_description = "You are registered for: " + ev_name + "\nDate: " + display_date + "\nTime: " + display_time + "\nLocation: " + location_cal + "\n\nQuestions? Email sales@josh.ai";
 
 	event_data = map();
 	event_data.put("title",           ev_name);
@@ -319,7 +358,7 @@ string automation.fn_sendCalendarInvite(string event_registration_id)
 	event_data.put("notify_attendee", 2);
 
 	cal_uid    = "0c07e560c52e4fb18aa9b6d653bc42e5";
-	cal_result = zoho.calendar.createEvent(cal_uid, event_data);
+	cal_result = zoho.calendar.createEvent(cal_uid, event_data, "zoho_calendar");
 
-	return "Email: " + mail_result.toString() + " | Calendar: " + cal_result.toString();
+	return "Email sent | Calendar: " + cal_result.toString();
 }
