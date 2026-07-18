@@ -323,11 +323,10 @@ string automation.fn_sendCalendarInvite(string event_registration_id)
 	// ── 7. Send confirmation email (sendmail[] bracket syntax required in CRM Deluge) ──
 	sendmail
 	[
-		from : "sales@josh.ai"
-		to : reg_email
-		subject : "Registration Confirmed: " + ev_name
-		message : html
-		content type : "html"
+		from:"sales@josh.ai"
+		to:reg_email
+		subject:"Registration Confirmed: " + ev_name
+		message:html
 	]
 
 	// ── 8. Create Zoho Calendar event + send invite ───────────────────────────────
