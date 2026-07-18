@@ -1,115 +1,328 @@
 // fn_sendCalendarInvite
-// Triggered by Workflow Rule: Event_Registrations → On Create
-// Input Parameter: event_registration_id (String) → mapped to ${Event_Registrations.ID}
+// Triggered by: Zoho CRM Workflow Rule → Event_Registrations → On Create
+// Input parameter: event_registration_id (String) mapped to ${Event_Registrations.ID}
 //
-// Creates a Zoho Calendar event and sends a calendar invitation to the registrant.
-// The invite arrives as a standard calendar email (Accept / Decline / Maybe)
-// that adds the event to Google Calendar, Outlook, or Apple Calendar automatically.
+// Sends the registrant:
+//   1. A branded HTML confirmation email with full event details + Google/Outlook calendar links
+//   2. A Zoho Calendar invite (Accept / Decline / Maybe) that adds the event to their calendar
+//
+// Prerequisites:
+//   - events@josh.ai must be a Zoho Mail mailbox in this org (or swap to ryan@josh.ai temporarily)
+//   - Authorize Zoho Mail + Zoho Calendar connections when saving this function
+//   - Event_Master must have a Timezone picklist field (API name: Timezone)
 
-// ── 1. Load the registration record ──────────────────────────────────────────
-reg = zoho.crm.getRecordById("Event_Registrations", event_registration_id);
+// ── 1. Load the registration and event ───────────────────────────────────────
+reg      = zoho.crm.getRecordById("Event_Registrations", event_registration_id);
 
-// ── 2. Load the event ────────────────────────────────────────────────────────
-event_lookup = reg.get("Event");
-event_id = event_lookup.get("id");
-ev = zoho.crm.getRecordById("Event_Master", event_id);
+ev_lookup = reg.get("Event");
+ev_id     = ev_lookup.get("id");
+ev        = zoho.crm.getRecordById("Event_Master", ev_id);
 
-ev_name      = ifnull(ev.get("Name"), "Josh.ai Event");
-start_time   = ifnull(ev.get("Start_Time"), "");
-end_time     = ifnull(ev.get("End_Time"), "");
-delivery     = ifnull(ev.get("Delivery_Type"), "");
-vlink        = ifnull(ev.get("Virtual_Meeting_Link"), "");
+ev_name   = ifnull(ev.get("Name"), "Josh.ai Event");
+start_raw = ifnull(ev.get("Start_Time"), "").toString();
+end_raw   = ifnull(ev.get("End_Time"), "").toString();
+delivery  = ifnull(ev.get("Delivery_Type"), "");
+vlink     = ifnull(ev.get("Virtual_Meeting_Link"), "");
+tz_name   = ifnull(ev.get("Timezone"), "America/Denver");
 
-// ── 3. Get registrant email (Contact takes priority over Lead) ────────────────
+// ── 2. Load registrant (Contact takes priority, Lead as fallback) ─────────────
 reg_email = "";
-reg_name  = "";
+reg_first = "";
+reg_last  = "";
 
 contact_lookup = reg.get("Contact");
 if(contact_lookup != null)
 {
-    contact_id = contact_lookup.get("id");
-    if(contact_id != null && contact_id != "")
+    cid = contact_lookup.get("id");
+    if(cid != null && cid != "")
     {
-        person    = zoho.crm.getRecordById("Contacts", contact_id);
-        reg_email = ifnull(person.get("Email"), "");
-        reg_name  = (ifnull(person.get("First_Name"), "") + " " + ifnull(person.get("Last_Name"), "")).trim();
+        c         = zoho.crm.getRecordById("Contacts", cid);
+        reg_email = ifnull(c.get("Email"), "");
+        reg_first = ifnull(c.get("First_Name"), "");
+        reg_last  = ifnull(c.get("Last_Name"), "");
     }
 }
-
 if(reg_email == "")
 {
     lead_lookup = reg.get("Lead");
     if(lead_lookup != null)
     {
-        lead_id   = lead_lookup.get("id");
-        if(lead_id != null && lead_id != "")
+        lid = lead_lookup.get("id");
+        if(lid != null && lid != "")
         {
-            person    = zoho.crm.getRecordById("Leads", lead_id);
-            reg_email = ifnull(person.get("Email"), "");
-            reg_name  = (ifnull(person.get("First_Name"), "") + " " + ifnull(person.get("Last_Name"), "")).trim();
+            l         = zoho.crm.getRecordById("Leads", lid);
+            reg_email = ifnull(l.get("Email"), "");
+            reg_first = ifnull(l.get("First_Name"), "");
+            reg_last  = ifnull(l.get("Last_Name"), "");
         }
     }
 }
-
 if(reg_email == "")
 {
-    return "ERROR: no email address found for registrant";
+    return "ERROR: no email address found for registrant on registration " + event_registration_id;
+}
+reg_name = (reg_first + " " + reg_last).trim();
+
+// ── 3. Parse datetime strings ─────────────────────────────────────────────────
+// CRM returns DateTime as "YYYY-MM-DD HH:MM:SS" in the org timezone.
+// Normalize in case it ever comes back with a T separator or timezone offset.
+start_clean = start_raw.replaceAll("T", " ");
+if(start_clean.length() > 19) { start_clean = start_clean.subString(0, 19); }
+end_clean = end_raw.replaceAll("T", " ");
+if(end_clean.length() > 19) { end_clean = end_clean.subString(0, 19); }
+
+// Guard against empty/malformed datetime
+if(start_clean.length() < 16)
+{
+    return "ERROR: Start_Time is empty or malformed on Event_Master " + ev_id;
 }
 
-// ── 4. Build location string ──────────────────────────────────────────────────
-if(delivery == "Virtual")
+s_year  = start_clean.subString(0, 4);
+s_month = start_clean.subString(5, 7);
+s_day   = start_clean.subString(8, 10);
+s_hour  = start_clean.subString(11, 13);
+s_min   = start_clean.subString(14, 16);
+
+has_end = end_clean.length() >= 16;
+if(has_end)
 {
-    location = vlink != "" ? vlink : "Virtual Event";
+    e_year  = end_clean.subString(0, 4);
+    e_month = end_clean.subString(5, 7);
+    e_day   = end_clean.subString(8, 10);
+    e_hour  = end_clean.subString(11, 13);
+    e_min   = end_clean.subString(14, 16);
 }
 else
 {
-    loc_name   = ifnull(ev.get("Event_Location_Name"), "");
-    loc_street = ifnull(ev.get("Event_Address_Street_Address"), "");
-    loc_city   = ifnull(ev.get("Event_Address_City"), "");
-    loc_state  = ifnull(ev.get("Event_Address_State_Province"), "");
-    loc_zip    = ifnull(ev.get("Event_Address_Zip_Postal_Code"), "");
-
-    loc_parts = list();
-    if(loc_name   != "") { loc_parts.add(loc_name);   }
-    if(loc_street != "") { loc_parts.add(loc_street); }
-    if(loc_city   != "") { loc_parts.add(loc_city);   }
-    if(loc_state  != "") { loc_parts.add(loc_state + (loc_zip != "" ? " " + loc_zip : "")); }
-    location = loc_parts.toString(", ");
-
-    if(delivery == "Hybrid" && vlink != "")
-    {
-        location = location + " | Virtual: " + vlink;
-    }
+    // Default end time to 1 hour after start if not set
+    e_year = s_year; e_month = s_month; e_day = s_day;
+    e_h_int = s_hour.toLong() + 1;
+    e_hour = e_h_int < 10 ? "0" + e_h_int.toString() : e_h_int.toString();
+    e_min  = s_min;
 }
 
-// ── 5. Build attendee list ────────────────────────────────────────────────────
+// Month display names
+month_map = map();
+month_map.put("01","January");  month_map.put("02","February"); month_map.put("03","March");
+month_map.put("04","April");    month_map.put("05","May");      month_map.put("06","June");
+month_map.put("07","July");     month_map.put("08","August");   month_map.put("09","September");
+month_map.put("10","October");  month_map.put("11","November"); month_map.put("12","December");
+
+// Convert start hour to 12-hour format
+s_h = s_hour.toLong();
+s_ampm = s_h >= 12 ? "PM" : "AM";
+if(s_h > 12) { s_h = s_h - 12; }
+if(s_h == 0) { s_h = 12; }
+s_h12 = s_h.toString();
+
+// Convert end hour to 12-hour format
+e_h = e_hour.toLong();
+e_ampm = e_h >= 12 ? "PM" : "AM";
+if(e_h > 12) { e_h = e_h - 12; }
+if(e_h == 0) { e_h = 12; }
+e_h12 = e_h.toString();
+
+// Timezone short label for email display
+tz_map = map();
+tz_map.put("America/New_York",    "ET");
+tz_map.put("America/Chicago",     "CT");
+tz_map.put("America/Denver",      "MT");
+tz_map.put("America/Los_Angeles", "PT");
+tz_map.put("America/Phoenix",     "MST");
+tz_map.put("UTC",                 "UTC");
+tz_label = ifnull(tz_map.get(tz_name), tz_name);
+
+display_date  = month_map.get(s_month) + " " + s_day + ", " + s_year;
+display_start = s_h12 + ":" + s_min + " " + s_ampm;
+display_end   = e_h12 + ":" + e_min + " " + e_ampm + " " + tz_label;
+display_time  = display_start + " – " + display_end;
+
+// ── 4. Build location strings ─────────────────────────────────────────────────
+loc_name    = ifnull(ev.get("Event_Location_Name"), "");
+loc_bldg    = ifnull(ev.get("Event_Address_Flat_House_No_Building_Apartment_Nam"), "");
+loc_street  = ifnull(ev.get("Event_Address_Street_Address"), "");
+loc_city    = ifnull(ev.get("Event_Address_City"), "");
+loc_state   = ifnull(ev.get("Event_Address_State_Province"), "");
+loc_zip     = ifnull(ev.get("Event_Address_Zip_Postal_Code"), "");
+loc_country = ifnull(ev.get("Event_Address_Country_Region"), "");
+
+city_state_zip = "";
+if(loc_city != "" && loc_state != "")
+{
+    city_state_zip = loc_city + ", " + loc_state + (loc_zip != "" ? " " + loc_zip : "");
+}
+else if(loc_city != "")  { city_state_zip = loc_city; }
+else if(loc_state != "") { city_state_zip = loc_state; }
+
+// Plain-text location for calendar event and URL parameters
+addr_parts = list();
+if(loc_name != "")        { addr_parts.add(loc_name); }
+if(loc_bldg != "")        { addr_parts.add(loc_bldg); }
+if(loc_street != "")      { addr_parts.add(loc_street); }
+if(city_state_zip != "")  { addr_parts.add(city_state_zip); }
+if(loc_country != "")     { addr_parts.add(loc_country); }
+full_address = addr_parts.toString(", ");
+
+if(delivery == "Virtual")
+{
+    location_cal  = vlink;
+    location_html = "<strong>Virtual Event</strong>"
+                  + (vlink != "" ? "<br><a href='" + vlink + "' style='color:#0070c0'>" + vlink + "</a>" : "");
+}
+else if(delivery == "Hybrid")
+{
+    location_cal  = full_address + (vlink != "" ? " | Join: " + vlink : "");
+    location_html = "<strong>" + loc_name + "</strong>"
+                  + (loc_bldg   != "" ? "<br>" + loc_bldg   : "")
+                  + (loc_street != "" ? "<br>" + loc_street  : "")
+                  + (city_state_zip != "" ? "<br>" + city_state_zip : "")
+                  + (loc_country != "" ? "<br>" + loc_country : "")
+                  + (vlink != "" ? "<br><br><strong>Virtual Link:</strong> <a href='" + vlink + "' style='color:#0070c0'>" + vlink + "</a>" : "");
+}
+else
+{
+    // In-Person (default)
+    location_cal  = full_address;
+    location_html = "<strong>" + loc_name + "</strong>"
+                  + (loc_bldg   != "" ? "<br>" + loc_bldg   : "")
+                  + (loc_street != "" ? "<br>" + loc_street  : "")
+                  + (city_state_zip != "" ? "<br>" + city_state_zip : "")
+                  + (loc_country != "" ? "<br>" + loc_country : "");
+}
+
+// ── 5. Build "Add to Calendar" URLs ──────────────────────────────────────────
+// Google Calendar — dates in YYYYMMDDTHHMMSS format (no separators)
+gcal_start = s_year + s_month + s_day + "T" + s_hour + s_min + "00";
+gcal_end   = e_year + e_month + e_day + "T" + e_hour + e_min + "00";
+// Simple URL encoding: replace spaces and ampersands (most common in event names/addresses)
+gcal_title  = ev_name.replaceAll(" ", "%20").replaceAll("&", "%26");
+gcal_loc    = location_cal.replaceAll(" ", "%20").replaceAll("&", "%26");
+gcal_url    = "https://calendar.google.com/calendar/render?action=TEMPLATE"
+            + "&text=" + gcal_title
+            + "&dates=" + gcal_start + "/" + gcal_end
+            + "&location=" + gcal_loc;
+
+// Outlook Live — dates in YYYY-MM-DDTHH:MM:SS format
+ol_start    = s_year + "-" + s_month + "-" + s_day + "T" + s_hour + ":" + s_min + ":00";
+ol_end      = e_year + "-" + e_month + "-" + e_day + "T" + e_hour + ":" + e_min + ":00";
+ol_title    = ev_name.replaceAll(" ", "%20").replaceAll("&", "%26");
+ol_loc      = location_cal.replaceAll(" ", "%20").replaceAll("&", "%26");
+ol_url      = "https://outlook.live.com/calendar/0/deeplink/compose?rru=addevent"
+            + "&startdt=" + ol_start
+            + "&enddt=" + ol_end
+            + "&subject=" + ol_title
+            + "&location=" + ol_loc;
+
+// ── 6. Build HTML confirmation email ─────────────────────────────────────────
+greeting = reg_first != "" ? "Hi " + reg_first + "," : "Hello,";
+
+html  = "<!DOCTYPE html><html><body style='margin:0;padding:0;background:#f5f5f5;font-family:Arial,Helvetica,sans-serif'>";
+html += "<div style='max-width:600px;margin:0 auto;background:#fff'>";
+
+// Header bar
+html += "<div style='background:#000;padding:20px 32px'>";
+html += "<p style='color:#fff;font-size:18px;font-weight:700;margin:0;letter-spacing:-0.3px'>Josh.ai</p>";
+html += "</div>";
+
+// Hero
+html += "<div style='background:#111;padding:32px'>";
+html += "<h1 style='color:#fff;font-size:24px;font-weight:700;margin:0 0 6px'>You&rsquo;re Registered!</h1>";
+html += "<p style='color:rgba(255,255,255,0.65);font-size:15px;margin:0'>" + ev_name + "</p>";
+html += "</div>";
+
+// Body
+html += "<div style='padding:32px'>";
+html += "<p style='margin:0 0 24px;color:#333;font-size:15px;line-height:1.6'>" + greeting + "<br><br>Your spot is confirmed. Here are the details for your records:</p>";
+
+// Details table
+html += "<table style='width:100%;border-collapse:collapse;margin-bottom:28px'>";
+
+html += "<tr style='border-top:1px solid #eee'>";
+html += "<td style='padding:13px 0;color:#888;font-size:12px;font-weight:700;letter-spacing:0.5px;text-transform:uppercase;width:100px;vertical-align:top'>Event</td>";
+html += "<td style='padding:13px 0;color:#111;font-size:15px;font-weight:600'>" + ev_name + "</td>";
+html += "</tr>";
+
+html += "<tr style='border-top:1px solid #eee'>";
+html += "<td style='padding:13px 0;color:#888;font-size:12px;font-weight:700;letter-spacing:0.5px;text-transform:uppercase;vertical-align:top'>Date</td>";
+html += "<td style='padding:13px 0;color:#111;font-size:15px'>" + display_date + "</td>";
+html += "</tr>";
+
+html += "<tr style='border-top:1px solid #eee'>";
+html += "<td style='padding:13px 0;color:#888;font-size:12px;font-weight:700;letter-spacing:0.5px;text-transform:uppercase;vertical-align:top'>Time</td>";
+html += "<td style='padding:13px 0;color:#111;font-size:15px'>" + display_time + "</td>";
+html += "</tr>";
+
+html += "<tr style='border-top:1px solid #eee;border-bottom:1px solid #eee'>";
+html += "<td style='padding:13px 0;color:#888;font-size:12px;font-weight:700;letter-spacing:0.5px;text-transform:uppercase;vertical-align:top'>";
+html += (delivery == "Virtual" ? "Join Link" : "Location");
+html += "</td>";
+html += "<td style='padding:13px 0;color:#111;font-size:15px;line-height:1.6'>" + location_html + "</td>";
+html += "</tr>";
+
+html += "</table>";
+
+// Add to Calendar section
+html += "<p style='margin:0 0 14px;color:#555;font-size:14px;font-weight:600'>Add to your calendar:</p>";
+html += "<table><tr>";
+html += "<td style='padding-right:10px'>";
+html += "<a href='" + gcal_url + "' style='display:inline-block;background:#000;color:#fff;padding:11px 22px;text-decoration:none;border-radius:5px;font-size:13px;font-weight:600'>Google Calendar</a>";
+html += "</td><td>";
+html += "<a href='" + ol_url + "' style='display:inline-block;background:#0078d4;color:#fff;padding:11px 22px;text-decoration:none;border-radius:5px;font-size:13px;font-weight:600'>Outlook Calendar</a>";
+html += "</td></tr></table>";
+
+html += "</div>";
+
+// Footer
+html += "<div style='border-top:1px solid #eee;padding:20px 32px;text-align:center'>";
+html += "<p style='color:#aaa;font-size:12px;margin:0'>Questions? Email <a href='mailto:events@josh.ai' style='color:#666;text-decoration:none'>events@josh.ai</a></p>";
+html += "</div>";
+
+html += "</div></body></html>";
+
+// ── 7. Send confirmation email ────────────────────────────────────────────────
+mail_map = map();
+mail_map.put("fromAddress", "events@josh.ai");
+mail_map.put("toAddress", reg_email);
+mail_map.put("subject", "Registration Confirmed: " + ev_name);
+mail_map.put("content", html);
+mail_map.put("mailFormat", "html");
+mail_result = zoho.mail.sendMail(mail_map);
+
+// ── 8. Create Zoho Calendar event + send invite to registrant ─────────────────
+// notify_attendee: 2 = Zoho sends a calendar invitation email to the attendee.
+// The registrant receives an Accept / Decline / Maybe email that adds the event
+// to Google Calendar, Outlook, or Apple Calendar when accepted.
+
+cal_description = "You are registered for: " + ev_name + "\n\n"
+                + "Date: " + display_date + "\n"
+                + "Time: " + display_time + "\n"
+                + "Location: " + location_cal + "\n\n"
+                + "Questions? Email events@josh.ai";
+
 attendee = map();
 attendee.put("email", reg_email);
-attendee.put("attendance", 1);  // 1 = Required attendee
-
+attendee.put("attendance", 1);
 attendees = list();
 attendees.add(attendee);
 
-// ── 6. Build calendar event payload ──────────────────────────────────────────
-dateandtime = map();
-dateandtime.put("start", start_time);
-dateandtime.put("end", end_time);
-dateandtime.put("timezone", "America/Denver");
+// Calendar API expects "YYYY-MM-DDTHH:MM:SS" (ISO 8601, no offset — timezone field handles interpretation)
+cal_start = s_year + "-" + s_month + "-" + s_day + "T" + s_hour + ":" + s_min + ":00";
+cal_end   = e_year + "-" + e_month + "-" + e_day + "T" + e_hour + ":" + e_min + ":00";
 
-description = "Hi " + reg_name + ",\n\n"
-            + "You are registered for: " + ev_name + "\n\n"
-            + "Questions? Email events@josh.ai";
+dateandtime = map();
+dateandtime.put("start",    cal_start);
+dateandtime.put("end",      cal_end);
+dateandtime.put("timezone", tz_name);
 
 event_data = map();
-event_data.put("title", ev_name);
-event_data.put("dateandtime", dateandtime);
-event_data.put("attendees", attendees);
-event_data.put("location", location);
-event_data.put("description", description);
-event_data.put("notify_attendee", 2);  // 2 = notify attendees + organizer
+event_data.put("title",          ev_name);
+event_data.put("dateandtime",    dateandtime);
+event_data.put("attendees",      attendees);
+event_data.put("location",       location_cal);
+event_data.put("description",    cal_description);
+event_data.put("notify_attendee", 2);
 
-// ── 7. Create the calendar event and send the invitation ─────────────────────
-cal_uid  = "0c07e560c52e4fb18aa9b6d653bc42e5";
-response = zoho.calendar.createEvent(cal_uid, event_data);
+cal_uid    = "0c07e560c52e4fb18aa9b6d653bc42e5";
+cal_result = zoho.calendar.createEvent(cal_uid, event_data);
 
-return response.toString();
+return "Email: " + mail_result.toString() + " | Calendar: " + cal_result.toString();
