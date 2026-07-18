@@ -324,6 +324,8 @@
 
       const detailUrl = `${detailBase}?event_id=${esc(ev.id)}${audience ? '&audience=' + esc(audience) : ''}`;
 
+      const timeDisplay = ev.start_display + (ev.timezone ? ' ' + ev.timezone : '');
+
       return `
         <div class="event-card">
           <div class="card-badges">
@@ -333,7 +335,7 @@
           <h3 class="card-title">${esc(ev.name)}</h3>
           ${desc}
           <div class="card-meta">
-            <div class="meta-row"><span class="meta-icon">📅</span><span>${esc(ev.start_display || '')}</span></div>
+            <div class="meta-row"><span class="meta-icon">📅</span><span>${esc(timeDisplay)}</span></div>
             ${locLine}
             ${closeLine}
           </div>

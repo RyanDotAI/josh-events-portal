@@ -5,6 +5,17 @@
 const ZOHO_ACCOUNTS = process.env.ZOHO_ACCOUNTS_URL || 'https://accounts.zoho.com';
 const ZOHO_CRM      = process.env.ZOHO_CRM_URL      || 'https://www.zohoapis.com';
 
+const TZ_LABEL = {
+  'Pacific Time (PT) - (US & Canada)':  'PT',
+  'Mountain Time (MT) - (US & Canada)': 'MT',
+  'Central Time (CT) - (US & Canada)':  'CT',
+  'Eastern Time (ET) - (US & Canada)':  'ET',
+  'Alaska Time (AKT)':                  'AKT',
+  'Hawaii-Aleutian Time (HST): UTC-10': 'HST',
+  'Atlantic Time (AT) - (Canada)':      'AT',
+  'Newfoundland (NT) - (Canada)':       'NT',
+};
+
 const CORS = {
   'Access-Control-Allow-Origin':  '*',
   'Access-Control-Allow-Methods': 'GET, OPTIONS',
@@ -53,6 +64,7 @@ function mapEvent(ev, full = false) {
     description:   ev.Event_Description || '',
     capacity:      ev.Capacity          || null,
     audience:      ev.Audience_Type     || '',
+    timezone:      TZ_LABEL[ev.Event_Timezone] || '',
   };
   if (full) {
     out.virtual_link = ev.Virtual_Meeting_Link || null;
@@ -97,6 +109,7 @@ exports.handler = async (event) => {
       'id', 'Name', 'Event_Type', 'Delivery_Type', 'Start_Time', 'End_Time',
       'Event_Location_Name', 'Event_Address_City', 'Event_Address_State_Province',
       'Registration_Close_Date', 'Event_Description', 'Capacity', 'Audience_Type',
+      'Event_Timezone',
     ].join(',');
 
     const url = `${ZOHO_CRM}/crm/v6/Event_Master/search`

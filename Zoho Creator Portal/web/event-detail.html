@@ -273,9 +273,8 @@
         <div class="event-meta-grid">
           <div class="meta-item">
             <label>Date &amp; Time</label>
-            <div class="meta-value">${esc(ev.start_display || 'TBD')}</div>
+            <div class="meta-value">${esc(ev.start_display || 'TBD')}${ev.end_display ? ' – ' + esc(ev.end_display) : ''}${ev.timezone ? ' ' + esc(ev.timezone) : ''}</div>
           </div>
-          ${ev.end_display ? `<div class="meta-item"><label>Ends</label><div class="meta-value">${esc(ev.end_display)}</div></div>` : ''}
           ${locationHtml}
           ${ev.close_date ? `<div class="meta-item"><label>Register By</label><div class="meta-value">${esc(ev.close_date)}</div></div>` : ''}
           ${ev.capacity ? `<div class="meta-item"><label>Capacity</label><div class="meta-value">${esc(String(ev.capacity))} attendees</div></div>` : ''}
