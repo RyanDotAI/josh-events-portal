@@ -223,12 +223,12 @@ string events.fn_sendCalendarInvite(string event_registration_id)
 	html += "<td><a href='" + ol_url + "' style='display:inline-block;background:#0078d4;color:#fff;padding:11px 22px;text-decoration:none;border-radius:5px;font-size:13px;font-weight:600'>Outlook Calendar</a></td>";
 	html += "</tr></table>";
 	html += "</div>";
-	html += "<div style='border-top:1px solid #eee;padding:20px 32px;text-align:center'><p style='color:#aaa;font-size:12px;margin:0'>Questions? Email <a href='mailto:events@josh.ai' style='color:#666;text-decoration:none'>events@josh.ai</a></p></div>";
+	html += "<div style='border-top:1px solid #eee;padding:20px 32px;text-align:center'><p style='color:#aaa;font-size:12px;margin:0'>Questions? Email <a href='mailto:sales@josh.ai' style='color:#666;text-decoration:none'>sales@josh.ai</a></p></div>";
 	html += "</div></body></html>";
 
 	// ── 7. Send confirmation email ────────────────────────────────────────────────
 	mail_map = map();
-	mail_map.put("fromAddress", "events@josh.ai");
+	mail_map.put("fromAddress", "sales@josh.ai");
 	mail_map.put("toAddress", reg_email);
 	mail_map.put("subject", "Registration Confirmed: " + ev_name);
 	mail_map.put("content", html);
@@ -242,7 +242,7 @@ string events.fn_sendCalendarInvite(string event_registration_id)
 	                + "Date: " + display_date + "\n"
 	                + "Time: " + display_time + "\n"
 	                + "Location: " + location_cal + "\n\n"
-	                + "Questions? Email events@josh.ai";
+	                + "Questions? Email sales@josh.ai";
 
 	attendee = map();
 	attendee.put("email", reg_email);
