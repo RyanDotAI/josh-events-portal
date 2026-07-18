@@ -282,43 +282,44 @@ string automation.fn_sendCalendarInvite(string event_registration_id)
 		greeting = "Hello,";
 	}
 
-	html  = "<!DOCTYPE html><html><body style='margin:0;padding:0;background:#f5f5f5;font-family:Arial,sans-serif'>";
-	html += "<div style='max-width:600px;margin:0 auto;background:#ffffff'>";
-	html += "<div style='background:#000000;padding:20px 32px'>";
-	html += "<p style='color:#ffffff;font-size:18px;font-weight:bold;margin:0'>Josh.ai</p>";
-	html += "</div>";
-	html += "<div style='background:#111111;padding:32px'>";
-	html += "<h1 style='color:#ffffff;font-size:24px;margin:0 0 8px'>You're Registered!</h1>";
-	html += "<p style='color:#aaaaaa;font-size:15px;margin:0'>" + ev_name + "</p>";
-	html += "</div>";
-	html += "<div style='padding:32px'>";
-	html += "<p style='color:#333333;font-size:15px;line-height:1.6;margin:0 0 24px'>" + greeting + "<br><br>Your spot is confirmed. Here are your event details:</p>";
-	html += "<table style='width:100%;border-collapse:collapse;margin-bottom:28px'>";
-	html += "<tr style='border-top:1px solid #eeeeee'>";
-	html += "<td style='padding:12px 0;color:#888888;font-size:12px;font-weight:bold;width:90px;vertical-align:top'>EVENT</td>";
-	html += "<td style='padding:12px 0;color:#111111;font-size:15px;font-weight:bold'>" + ev_name + "</td>";
-	html += "</tr>";
-	html += "<tr style='border-top:1px solid #eeeeee'>";
-	html += "<td style='padding:12px 0;color:#888888;font-size:12px;font-weight:bold;vertical-align:top'>DATE</td>";
-	html += "<td style='padding:12px 0;color:#111111;font-size:15px'>" + display_date + "</td>";
-	html += "</tr>";
-	html += "<tr style='border-top:1px solid #eeeeee'>";
-	html += "<td style='padding:12px 0;color:#888888;font-size:12px;font-weight:bold;vertical-align:top'>TIME</td>";
-	html += "<td style='padding:12px 0;color:#111111;font-size:15px'>" + display_time + "</td>";
-	html += "</tr>";
-	html += "<tr style='border-top:1px solid #eeeeee;border-bottom:1px solid #eeeeee'>";
-	html += "<td style='padding:12px 0;color:#888888;font-size:12px;font-weight:bold;vertical-align:top'>" + loc_label + "</td>";
-	html += "<td style='padding:12px 0;color:#111111;font-size:15px;line-height:1.6'>" + location_html + "</td>";
-	html += "</tr>";
-	html += "</table>";
-	html += "<p style='color:#555555;font-size:14px;font-weight:bold;margin:0 0 12px'>Add to your calendar:</p>";
-	html += "<a href='" + gcal_url + "' style='display:inline-block;background:#000000;color:#ffffff;padding:10px 20px;text-decoration:none;border-radius:4px;font-size:13px;font-weight:bold;margin-right:10px'>Google Calendar</a>";
-	html += "<a href='" + ol_url + "' style='display:inline-block;background:#0078d4;color:#ffffff;padding:10px 20px;text-decoration:none;border-radius:4px;font-size:13px;font-weight:bold'>Outlook Calendar</a>";
-	html += "</div>";
-	html += "<div style='border-top:1px solid #eeeeee;padding:20px 32px;text-align:center'>";
-	html += "<p style='color:#aaaaaa;font-size:12px;margin:0'>Questions? Email sales@josh.ai</p>";
-	html += "</div>";
-	html += "</div></body></html>";
+	// Variable named email_html to avoid any collision with Deluge keywords
+	email_html  = "<!DOCTYPE html><html><body style='margin:0;padding:0;background:#f5f5f5;font-family:Arial,sans-serif'>";
+	email_html += "<div style='max-width:600px;margin:0 auto;background:#ffffff'>";
+	email_html += "<div style='background:#000000;padding:20px 32px'>";
+	email_html += "<p style='color:#ffffff;font-size:18px;font-weight:bold;margin:0'>Josh.ai</p>";
+	email_html += "</div>";
+	email_html += "<div style='background:#111111;padding:32px'>";
+	email_html += "<h1 style='color:#ffffff;font-size:24px;margin:0 0 8px'>You're Registered!</h1>";
+	email_html += "<p style='color:#aaaaaa;font-size:15px;margin:0'>" + ev_name + "</p>";
+	email_html += "</div>";
+	email_html += "<div style='padding:32px'>";
+	email_html += "<p style='color:#333333;font-size:15px;line-height:1.6;margin:0 0 24px'>" + greeting + "<br><br>Your spot is confirmed. Here are your event details:</p>";
+	email_html += "<table style='width:100%;border-collapse:collapse;margin-bottom:28px'>";
+	email_html += "<tr style='border-top:1px solid #eeeeee'>";
+	email_html += "<td style='padding:12px 0;color:#888888;font-size:12px;font-weight:bold;width:90px;vertical-align:top'>EVENT</td>";
+	email_html += "<td style='padding:12px 0;color:#111111;font-size:15px;font-weight:bold'>" + ev_name + "</td>";
+	email_html += "</tr>";
+	email_html += "<tr style='border-top:1px solid #eeeeee'>";
+	email_html += "<td style='padding:12px 0;color:#888888;font-size:12px;font-weight:bold;vertical-align:top'>DATE</td>";
+	email_html += "<td style='padding:12px 0;color:#111111;font-size:15px'>" + display_date + "</td>";
+	email_html += "</tr>";
+	email_html += "<tr style='border-top:1px solid #eeeeee'>";
+	email_html += "<td style='padding:12px 0;color:#888888;font-size:12px;font-weight:bold;vertical-align:top'>TIME</td>";
+	email_html += "<td style='padding:12px 0;color:#111111;font-size:15px'>" + display_time + "</td>";
+	email_html += "</tr>";
+	email_html += "<tr style='border-top:1px solid #eeeeee;border-bottom:1px solid #eeeeee'>";
+	email_html += "<td style='padding:12px 0;color:#888888;font-size:12px;font-weight:bold;vertical-align:top'>" + loc_label + "</td>";
+	email_html += "<td style='padding:12px 0;color:#111111;font-size:15px;line-height:1.6'>" + location_html + "</td>";
+	email_html += "</tr>";
+	email_html += "</table>";
+	email_html += "<p style='color:#555555;font-size:14px;font-weight:bold;margin:0 0 12px'>Add to your calendar:</p>";
+	email_html += "<a href='" + gcal_url + "' style='display:inline-block;background:#000000;color:#ffffff;padding:10px 20px;text-decoration:none;border-radius:4px;font-size:13px;font-weight:bold;margin-right:10px'>Google Calendar</a>";
+	email_html += "<a href='" + ol_url + "' style='display:inline-block;background:#0078d4;color:#ffffff;padding:10px 20px;text-decoration:none;border-radius:4px;font-size:13px;font-weight:bold'>Outlook Calendar</a>";
+	email_html += "</div>";
+	email_html += "<div style='border-top:1px solid #eeeeee;padding:20px 32px;text-align:center'>";
+	email_html += "<p style='color:#aaaaaa;font-size:12px;margin:0'>Questions? Email sales@josh.ai</p>";
+	email_html += "</div>";
+	email_html += "</div></body></html>";
 
 	// ── 7. Send confirmation email (sendmail[] bracket syntax required in CRM Deluge) ──
 	sendmail
@@ -326,7 +327,7 @@ string automation.fn_sendCalendarInvite(string event_registration_id)
 		from:"sales@josh.ai"
 		to:reg_email
 		subject:"Registration Confirmed: " + ev_name
-		message:html
+		message:email_html
 	]
 
 	// ── 8. Create Zoho Calendar event + send invite ───────────────────────────────
@@ -346,7 +347,8 @@ string automation.fn_sendCalendarInvite(string event_registration_id)
 	attendees = list();
 	attendees.add(attendee);
 
-	cal_description = "You are registered for: " + ev_name + "\nDate: " + display_date + "\nTime: " + display_time + "\nLocation: " + location_cal + "\n\nQuestions? Email sales@josh.ai";
+	// \n is not supported in Deluge strings — use pipe separators
+	cal_description = "You are registered for: " + ev_name + " | Date: " + display_date + " | Time: " + display_time + " | Location: " + location_cal + " | Questions? Email sales@josh.ai";
 
 	event_data = map();
 	event_data.put("title",           ev_name);
@@ -356,8 +358,12 @@ string automation.fn_sendCalendarInvite(string event_registration_id)
 	event_data.put("description",     cal_description);
 	event_data.put("notify_attendee", 2);
 
+	// zoho.calendar.createEvent requires event_data nested under "eventdata" key
+	event_wrapper = map();
+	event_wrapper.put("eventdata", event_data);
+
 	cal_uid    = "0c07e560c52e4fb18aa9b6d653bc42e5";
-	cal_result = zoho.calendar.createEvent(cal_uid, event_data, "zoho_calendar");
+	cal_result = zoho.calendar.createEvent(cal_uid, event_wrapper, "zoho_calendar");
 
 	return "Email sent | Calendar: " + cal_result.toString();
 }
