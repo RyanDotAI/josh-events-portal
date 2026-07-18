@@ -43,8 +43,10 @@ function formatDateTime(dt) {
   if (!dt) return '';
   const [datePart, timePart] = dt.split('T');
   if (!datePart) return '';
+  const [year, month, day] = datePart.split('-');
+  const formatted = year && month && day ? `${month}-${day}-${year}` : datePart;
   const time = timePart ? timePart.substring(0, 5) : '';
-  return time ? `${datePart} at ${time}` : datePart;
+  return time ? `${formatted} at ${time}` : formatted;
 }
 
 function mapEvent(ev, full = false) {
