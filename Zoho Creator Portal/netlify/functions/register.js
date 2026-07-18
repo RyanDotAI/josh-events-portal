@@ -9,6 +9,7 @@ const nodemailer = require('nodemailer');
 
 const ZOHO_ACCOUNTS = process.env.ZOHO_ACCOUNTS_URL || 'https://accounts.zoho.com';
 const ZOHO_CRM      = process.env.ZOHO_CRM_URL      || 'https://www.zohoapis.com';
+const SITE_URL      = process.env.SITE_URL           || 'https://okjosh.netlify.app';
 
 const CORS = {
   'Access-Control-Allow-Origin':  '*',
@@ -175,7 +176,7 @@ function buildCompactTime(start, end, tzLabel) {
 
 // ── Email builder ─────────────────────────────────────────────────────────────
 
-function buildEmailContent(ev, registrant_name, reg_email) {
+function buildEmailContent(ev, registrant_name, reg_email, cancel_url) {
   const ev_name     = ev.Name || '';
   const ev_delivery = ev.Delivery_Type || '';
   const ev_vlink    = ev.Virtual_Meeting_Link || '';
@@ -293,6 +294,7 @@ function buildEmailContent(ev, registrant_name, reg_email) {
     "</div>",
     "<div style='border-top:1px solid #eeeeee;padding:20px 32px;text-align:center'>",
     "<p style='color:#aaaaaa;font-size:12px;margin:0'>Questions? Email <a href='mailto:sales@josh.ai' style='color:#aaaaaa'>sales@josh.ai</a></p>",
+    ...(cancel_url ? [`<p style='color:#aaaaaa;font-size:12px;margin:8px 0 0'>Need to cancel? <a href='${cancel_url}' style='color:#aaaaaa'>Cancel your registration</a></p>`] : []),
     "</div>",
     "</div></body></html>",
   ].join('');
@@ -302,7 +304,15 @@ function buildEmailContent(ev, registrant_name, reg_email) {
 
 // ── ICS builder ───────────────────────────────────────────────────────────────
 
-function buildICS({ ev, reg_email, registrant_name, reg_id }) {
+function icsEscape(str) {
+  return String(str || '')
+    .replace(/\\/g, '\\\\')
+    .replace(/;/g, '\\;')
+    .replace(/,/g, '\\,')
+    .replace(/\r?\n/g, '\\n');
+}
+
+function buildICS({ ev, reg_email, registrant_name, reg_id, cancel_url }) {
   const start  = parseDt(ev.Start_Time);
   const end    = parseDt(ev.End_Time);
   if (!start) return null;
@@ -337,6 +347,11 @@ function buildICS({ ev, reg_email, registrant_name, reg_id }) {
   const summary_title = `${ev_name} - ${compact_time}`;
   const safe_loc      = location.replace(/[\\;,]/g, ' ');
 
+  const desc_parts = [`You are registered for ${ev_name}.`];
+  if (ev.Event_Description) desc_parts.push(icsEscape(ev.Event_Description));
+  if (cancel_url) desc_parts.push(`To cancel your registration: ${cancel_url}`);
+  const description = desc_parts.join('\\n\\n');
+
   return [
     'BEGIN:VCALENDAR',
     'VERSION:2.0',
@@ -350,8 +365,9 @@ function buildICS({ ev, reg_email, registrant_name, reg_id }) {
     'ORGANIZER;CN=Josh.ai Events:mailto:sales@josh.ai',
     `ATTENDEE;RSVP=TRUE;PARTSTAT=NEEDS-ACTION;CN=${registrant_name}:mailto:${reg_email}`,
     `SUMMARY:${summary_title}`,
-    `DESCRIPTION:You are registered for ${ev_name}`,
+    `DESCRIPTION:${description}`,
     `LOCATION:${safe_loc}`,
+    ...(cancel_url ? [`URL:${cancel_url}`] : []),
     'STATUS:CONFIRMED',
     'SEQUENCE:0',
     'END:VEVENT',
@@ -376,8 +392,9 @@ async function sendConfirmationEmail(ev, registrant_name, reg_email, reg_id) {
     auth:   { user: gmailUser, pass: gmailPass },
   });
 
-  const { html, subject } = buildEmailContent(ev, registrant_name, reg_email);
-  const ics = buildICS({ ev, reg_email, registrant_name, reg_id });
+  const cancel_url = reg_id ? `${SITE_URL}/cancel.html?reg_id=${reg_id}` : '';
+  const { html, subject } = buildEmailContent(ev, registrant_name, reg_email, cancel_url);
+  const ics = buildICS({ ev, reg_email, registrant_name, reg_id, cancel_url });
 
   const mailOptions = {
     from:    `"Josh.ai Events" <${gmailUser}>`,

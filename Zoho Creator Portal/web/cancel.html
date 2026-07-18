@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cancel Registration — Josh.ai</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+      background: #f7f7f7;
+      color: #111;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .site-header {
+      background: #000;
+      padding: 0 40px;
+      height: 60px;
+      display: flex;
+      align-items: center;
+    }
+    .site-header .logo {
+      color: #fff;
+      font-size: 18px;
+      font-weight: 700;
+      letter-spacing: -0.5px;
+      text-decoration: none;
+    }
+
+    .page-hero {
+      background: #000;
+      color: #fff;
+      padding: 48px 40px 40px;
+    }
+    .page-hero h1 {
+      font-size: 32px;
+      font-weight: 700;
+      letter-spacing: -0.8px;
+      margin-bottom: 6px;
+    }
+    .page-hero p {
+      font-size: 15px;
+      color: rgba(255,255,255,0.6);
+    }
+
+    .main {
+      max-width: 560px;
+      margin: 0 auto;
+      padding: 40px 24px 80px;
+    }
+
+    .state-box {
+      background: #fff;
+      border-radius: 10px;
+      padding: 36px;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.07);
+    }
+    .state-box h2 {
+      font-size: 20px;
+      font-weight: 700;
+      margin-bottom: 12px;
+      color: #111;
+    }
+    .state-box p {
+      font-size: 15px;
+      color: #444;
+      line-height: 1.6;
+      margin-bottom: 12px;
+    }
+    .state-box p.sub {
+      font-size: 13px;
+      color: #777;
+      margin-bottom: 20px;
+    }
+    .state-box p:last-child { margin-bottom: 0; }
+
+    .success-icon {
+      width: 48px;
+      height: 48px;
+      background: #111;
+      color: #fff;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 22px;
+      font-weight: 700;
+      margin-bottom: 16px;
+    }
+
+    .field {
+      margin-bottom: 20px;
+    }
+    .field label {
+      display: block;
+      font-size: 13px;
+      font-weight: 600;
+      color: #333;
+      margin-bottom: 6px;
+    }
+    .field input {
+      width: 100%;
+      padding: 10px 14px;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      font-size: 15px;
+      color: #111;
+      transition: border-color 0.15s;
+    }
+    .field input:focus {
+      outline: none;
+      border-color: #000;
+    }
+
+    .actions {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-top: 4px;
+    }
+
+    .btn {
+      display: inline-block;
+      padding: 10px 20px;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 600;
+      text-decoration: none;
+      text-align: center;
+      cursor: pointer;
+      border: none;
+      transition: opacity 0.15s;
+    }
+    .btn:hover { opacity: 0.85; }
+    .btn:disabled { opacity: 0.5; cursor: default; }
+    .btn-primary   { background: #000; color: #fff; }
+    .btn-secondary { background: #eee; color: #333; }
+    .btn-danger    { background: #c0392b; color: #fff; }
+
+    .form-error {
+      display: none;
+      color: #c0392b;
+      font-size: 13px;
+      margin-bottom: 16px;
+      padding: 10px 14px;
+      background: #fdf0ef;
+      border-radius: 6px;
+      border: 1px solid #f5c6c3;
+    }
+
+    .state-loading {
+      text-align: center;
+      padding: 80px 20px;
+      color: #999;
+    }
+    .state-loading .spinner {
+      width: 32px;
+      height: 32px;
+      border: 3px solid #eee;
+      border-top-color: #000;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      margin: 0 auto 16px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    @media (max-width: 600px) {
+      .page-hero { padding: 32px 20px; }
+      .page-hero h1 { font-size: 24px; }
+      .main { padding: 24px 16px 60px; }
+      .state-box { padding: 24px; }
+      .actions { flex-direction: column; }
+      .btn { width: 100%; }
+    }
+  </style>
+</head>
+<body>
+
+<header class="site-header">
+  <a href="/events.html" class="logo">Josh.ai</a>
+</header>
+
+<div class="page-hero">
+  <h1>Cancel Registration</h1>
+  <p id="heroSub">Manage your event registration</p>
+</div>
+
+<div class="main">
+  <div id="content">
+    <div class="state-loading">
+      <div class="spinner"></div>
+      <p>Loading registration...</p>
+    </div>
+  </div>
+</div>
+
+<script>
+  const params     = new URLSearchParams(window.location.search);
+  const reg_id     = params.get('reg_id') || '';
+  let   event_name = '';
+
+  function esc(str) {
+    return String(str || '')
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  }
+
+  async function init() {
+    if (!reg_id) {
+      showError('Invalid cancellation link. Please check the link in your confirmation email.');
+      return;
+    }
+
+    try {
+      const res  = await fetch(`/api/cancel?reg_id=${encodeURIComponent(reg_id)}`);
+      if (res.status === 404) {
+        showError('Registration not found. Please check the link in your confirmation email.');
+        return;
+      }
+      if (!res.ok) throw new Error('API error');
+
+      const data = await res.json();
+      event_name = data.event_name || '';
+
+      if (data.status === 'Cancelled') {
+        showAlreadyCancelled();
+        return;
+      }
+
+      showForm();
+    } catch (err) {
+      showError('Unable to load registration details. Please try again later or contact <a href="mailto:sales@josh.ai">sales@josh.ai</a>.');
+    }
+  }
+
+  function showError(msg) {
+    document.getElementById('content').innerHTML = `
+      <div class="state-box">
+        <h2>Something went wrong</h2>
+        <p>${msg}</p>
+        <a href="/events.html" class="btn btn-secondary" style="margin-top:8px">View Events</a>
+      </div>`;
+  }
+
+  function showAlreadyCancelled() {
+    document.getElementById('content').innerHTML = `
+      <div class="state-box">
+        <h2>Already Cancelled</h2>
+        <p>Your registration${event_name ? ` for <strong>${esc(event_name)}</strong>` : ''} has already been cancelled.</p>
+        <a href="/events.html" class="btn btn-primary" style="margin-top:8px">View Upcoming Events</a>
+      </div>`;
+  }
+
+  function showForm() {
+    document.getElementById('heroSub').textContent = event_name || 'Manage your event registration';
+    document.getElementById('content').innerHTML = `
+      <div class="state-box">
+        <h2>Cancel Registration</h2>
+        <p>You are about to cancel your registration${event_name ? ` for <strong>${esc(event_name)}</strong>` : ''}.</p>
+        <p class="sub">To confirm, enter the email address you used to register.</p>
+        <p id="formError" class="form-error"></p>
+        <form id="cancelForm" onsubmit="doCancel(event)">
+          <div class="field">
+            <label for="email">Email Address</label>
+            <input type="email" id="email" name="email" required placeholder="your@email.com" autocomplete="email">
+          </div>
+          <div class="actions">
+            <button type="submit" id="submitBtn" class="btn btn-danger">Cancel My Registration</button>
+            <a href="/events.html" class="btn btn-secondary">Keep My Registration</a>
+          </div>
+        </form>
+      </div>`;
+  }
+
+  function showSuccess() {
+    document.getElementById('content').innerHTML = `
+      <div class="state-box">
+        <div class="success-icon">✓</div>
+        <h2>Registration Cancelled</h2>
+        <p>Your registration${event_name ? ` for <strong>${esc(event_name)}</strong>` : ''} has been cancelled. A confirmation email has been sent.</p>
+        <a href="/events.html" class="btn btn-primary" style="margin-top:8px; display:inline-block">View Upcoming Events</a>
+      </div>`;
+  }
+
+  async function doCancel(e) {
+    e.preventDefault();
+    const email     = document.getElementById('email').value.trim();
+    const submitBtn = document.getElementById('submitBtn');
+    const errEl     = document.getElementById('formError');
+
+    errEl.style.display = 'none';
+    submitBtn.disabled  = true;
+    submitBtn.textContent = 'Cancelling...';
+
+    try {
+      const res  = await fetch('/api/cancel', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ reg_id, email }),
+      });
+      const data = await res.json();
+
+      if (data.status === 'SUCCESS') {
+        if (data.event_name) event_name = data.event_name;
+        showSuccess();
+      } else if (data.status === 'EMAIL_MISMATCH') {
+        errEl.textContent   = 'The email address you entered does not match our records. Please check and try again.';
+        errEl.style.display = 'block';
+        submitBtn.disabled  = false;
+        submitBtn.textContent = 'Cancel My Registration';
+      } else if (data.status === 'ALREADY_CANCELLED') {
+        showAlreadyCancelled();
+      } else {
+        errEl.textContent   = 'Unable to cancel your registration. Please try again or contact sales@josh.ai.';
+        errEl.style.display = 'block';
+        submitBtn.disabled  = false;
+        submitBtn.textContent = 'Cancel My Registration';
+      }
+    } catch (err) {
+      errEl.textContent   = 'Unable to cancel your registration. Please try again or contact sales@josh.ai.';
+      errEl.style.display = 'block';
+      submitBtn.disabled  = false;
+      submitBtn.textContent = 'Cancel My Registration';
+    }
+  }
+
+  init();
+</script>
+</body>
+</html>

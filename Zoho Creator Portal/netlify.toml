@@ -18,3 +18,9 @@
   from = "/api/register"
   to   = "/.netlify/functions/register"
   status = 200
+
+# Route /api/cancel to cancel function
+[[redirects]]
+  from = "/api/cancel"
+  to   = "/.netlify/functions/cancel"
+  status = 200
