@@ -1,4 +1,4 @@
-string events.fn_sendCalendarInvite(string event_registration_id)
+string automation.fn_sendCalendarInvite(string event_registration_id)
 {
 	// ── 1. Load the registration and event ───────────────────────────────────────
 	reg       = zoho.crm.getRecordById("Event_Registrations", event_registration_id);
