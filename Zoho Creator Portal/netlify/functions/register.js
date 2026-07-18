@@ -238,6 +238,7 @@ function buildEmailContent(ev, registrant_name, reg_email, cancel_url) {
   const gcal_url = `https://calendar.google.com/calendar/render?action=TEMPLATE`
     + `&text=${encodeURIComponent(cal_title)}`
     + `&dates=${gcal_start}/${gcal_end}`
+    + `&ctz=${encodeURIComponent(tz_iana)}`
     + `&details=${encodeURIComponent(cal_desc)}`
     + `&location=${encodeURIComponent(cal_location)}`;
   const ol_url = `https://outlook.live.com/calendar/0/deeplink/compose?rru=addevent`
