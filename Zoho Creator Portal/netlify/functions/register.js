@@ -320,6 +320,7 @@ async function sendConfirmationEmail(ev, registrant_name, reg_email, reg_id) {
   const mailOptions = {
     from:    `"Josh.ai Events" <${gmailUser}>`,
     to:      reg_email,
+    replyTo: 'sales@josh.ai',
     subject,
     html,
     ...(ics ? { icalEvent: { filename: 'invite.ics', method: 'REQUEST', content: ics } } : {}),
