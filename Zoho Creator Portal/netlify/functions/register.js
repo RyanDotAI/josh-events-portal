@@ -156,6 +156,23 @@ function toOlUtc(date) {
   return date.toISOString().slice(0, 19) + 'Z';
 }
 
+// Build compact time string for calendar title, e.g. "4-6pm MT" or "11am-1pm MT".
+// Omits ":00" minutes, collapses shared AM/PM to end only.
+function buildCompactTime(start, end, tzLabel) {
+  const sh = parseInt(start.hour, 10);
+  const eh = parseInt(end.hour, 10);
+  const s_ampm = sh >= 12 ? 'pm' : 'am';
+  const e_ampm = eh >= 12 ? 'pm' : 'am';
+  const s_h12  = sh === 0 ? 12 : sh > 12 ? sh - 12 : sh;
+  const e_h12  = eh === 0 ? 12 : eh > 12 ? eh - 12 : eh;
+  const s_time = start.min === '00' ? `${s_h12}` : `${s_h12}:${start.min}`;
+  const e_time = end.min   === '00' ? `${e_h12}` : `${e_h12}:${end.min}`;
+  const time   = s_ampm === e_ampm
+    ? `${s_time}-${e_time}${e_ampm}`
+    : `${s_time}${s_ampm}-${e_time}${e_ampm}`;
+  return `${time} ${tzLabel}`;
+}
+
 // ── Email builder ─────────────────────────────────────────────────────────────
 
 function buildEmailContent(ev, registrant_name, reg_email) {
@@ -292,7 +309,8 @@ function buildICS({ ev, reg_email, registrant_name, reg_id }) {
 
   const endParts = end || { ...start, hour: String(parseInt(start.hour, 10) + 1).padStart(2, '0') };
   const tz_raw   = ev.Event_Timezone || '';
-  const tzIana   = TZ_IANA[tz_raw] || 'America/Denver';
+  const tzIana   = TZ_IANA[tz_raw]  || 'America/Denver';
+  const tz_label = TZ_LABEL[tz_raw] || 'MT';
 
   const ev_delivery = ev.Delivery_Type || '';
   const ev_vlink    = ev.Virtual_Meeting_Link || '';
@@ -314,8 +332,10 @@ function buildICS({ ev, reg_email, registrant_name, reg_id }) {
   const dtEnd    = toGcalUtc(endUtc);
   const now      = new Date();
   const dtstamp  = now.toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
-  const ev_name  = (ev.Name || '').replace(/[\\;,]/g, ' ');
-  const safe_loc = location.replace(/[\\;,]/g, ' ');
+  const ev_name       = (ev.Name || '').replace(/[\\;,]/g, ' ');
+  const compact_time  = buildCompactTime(start, endParts, tz_label);
+  const summary_title = `${ev_name} - ${compact_time}`;
+  const safe_loc      = location.replace(/[\\;,]/g, ' ');
 
   return [
     'BEGIN:VCALENDAR',
@@ -329,7 +349,7 @@ function buildICS({ ev, reg_email, registrant_name, reg_id }) {
     `UID:${reg_id}@josh.ai`,
     'ORGANIZER;CN=Josh.ai Events:mailto:sales@josh.ai',
     `ATTENDEE;RSVP=TRUE;PARTSTAT=NEEDS-ACTION;CN=${registrant_name}:mailto:${reg_email}`,
-    `SUMMARY:${ev_name}`,
+    `SUMMARY:${summary_title}`,
     `DESCRIPTION:You are registered for ${ev_name}`,
     `LOCATION:${safe_loc}`,
     'STATUS:CONFIRMED',
