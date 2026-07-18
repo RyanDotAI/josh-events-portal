@@ -1,5 +1,9 @@
 [build]
-  publish = "web"
+  publish   = "web"
+  functions = "netlify/functions"
+
+[build.environment]
+  NODE_VERSION = "18"
 
 # Route /api/events/{id} to events function (specific route first)
 [[redirects]]
