@@ -308,8 +308,10 @@ function buildICS({ ev, reg_email, registrant_name, reg_id }) {
   const addrParts = [loc_name, loc_bldg, loc_street, cityStateZip, loc_country].filter(Boolean);
   const location = ev_delivery === 'Virtual' ? ev_vlink : addrParts.join(', ');
 
-  const dtStart  = `${start.year}${start.month}${start.day}T${start.hour}${start.min}${start.sec}`;
-  const dtEnd    = `${endParts.year}${endParts.month}${endParts.day}T${endParts.hour}${endParts.min}${endParts.sec || '00'}`;
+  const startUtc = localToUtcDate(start.year, start.month, start.day, start.hour, start.min, start.sec, tzIana);
+  const endUtc   = localToUtcDate(endParts.year, endParts.month, endParts.day, endParts.hour, endParts.min, endParts.sec || '00', tzIana);
+  const dtStart  = toGcalUtc(startUtc);
+  const dtEnd    = toGcalUtc(endUtc);
   const now      = new Date();
   const dtstamp  = now.toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
   const ev_name  = (ev.Name || '').replace(/[\\;,]/g, ' ');
@@ -321,8 +323,8 @@ function buildICS({ ev, reg_email, registrant_name, reg_id }) {
     'PRODID:-//Josh.ai//Events//EN',
     'METHOD:REQUEST',
     'BEGIN:VEVENT',
-    `DTSTART;TZID=${tzIana}:${dtStart}`,
-    `DTEND;TZID=${tzIana}:${dtEnd}`,
+    `DTSTART:${dtStart}`,
+    `DTEND:${dtEnd}`,
     `DTSTAMP:${dtstamp}`,
     `UID:${reg_id}@josh.ai`,
     'ORGANIZER;CN=Josh.ai Events:mailto:sales@josh.ai',
