@@ -204,6 +204,7 @@ function buildEmailContent(ev, registrant_name, reg_email, cancel_url) {
 
   let display_date = '';
   let display_time = '';
+  let cal_title    = ev_name;
   let gcal_start = '', gcal_end = '', ol_start = '', ol_end = '';
 
   if (start) {
@@ -215,6 +216,7 @@ function buildEmailContent(ev, registrant_name, reg_email, cancel_url) {
     const endParts = end || { ...start, hour: String(parseInt(start.hour, 10) + 1).padStart(2, '0') };
     const { h12: eh, ampm: ea } = to12h(endParts.hour);
     display_time = `${sh}:${start.min} ${sa} – ${eh}:${endParts.min} ${ea} ${tz_label}`;
+    cal_title    = `${ev_name} - ${buildCompactTime(start, endParts, tz_label)}`;
 
     // For calendar links: convert to UTC so the time is correct for any viewer's timezone
     const startUtc = localToUtcDate(start.year, start.month, start.day, start.hour, start.min, start.sec, tz_iana);
@@ -225,15 +227,23 @@ function buildEmailContent(ev, registrant_name, reg_email, cancel_url) {
     ol_end     = toOlUtc(endUtc);
   }
 
+  // Description for calendar links
+  const cal_desc_parts = [`You are registered for ${ev_name}.`];
+  if (ev.Event_Description) cal_desc_parts.push(ev.Event_Description);
+  if (cancel_url) cal_desc_parts.push(`Cancel registration: ${cancel_url}`);
+  const cal_desc = cal_desc_parts.join('\n\n');
+
   // Location for calendar URLs
   const cal_location = ev_delivery === 'Virtual' ? ev_vlink : addr_full;
   const gcal_url = `https://calendar.google.com/calendar/render?action=TEMPLATE`
-    + `&text=${encodeURIComponent(ev_name)}`
+    + `&text=${encodeURIComponent(cal_title)}`
     + `&dates=${gcal_start}/${gcal_end}`
+    + `&details=${encodeURIComponent(cal_desc)}`
     + `&location=${encodeURIComponent(cal_location)}`;
   const ol_url = `https://outlook.live.com/calendar/0/deeplink/compose?rru=addevent`
     + `&startdt=${ol_start}&enddt=${ol_end}`
-    + `&subject=${encodeURIComponent(ev_name)}`
+    + `&subject=${encodeURIComponent(cal_title)}`
+    + `&body=${encodeURIComponent(cal_desc)}`
     + `&location=${encodeURIComponent(cal_location)}`;
 
   // Location block for email body
