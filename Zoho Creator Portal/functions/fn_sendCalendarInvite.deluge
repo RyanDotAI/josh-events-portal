@@ -307,7 +307,7 @@ string automation.fn_sendCalendarInvite(string event_registration_id)
 	html += "<td style='padding:12px 0;color:#111111;font-size:15px'>" + display_time + "</td>";
 	html += "</tr>";
 	html += "<tr style='border-top:1px solid #eeeeee;border-bottom:1px solid #eeeeee'>";
-	html += "<td style='padding:12px 0;color:#888888;font-size:12px;font-weight:bold;vertical-align:top'>" + loc_label.toUpperCase() + "</td>";
+	html += "<td style='padding:12px 0;color:#888888;font-size:12px;font-weight:bold;vertical-align:top'>" + loc_label + "</td>";
 	html += "<td style='padding:12px 0;color:#111111;font-size:15px;line-height:1.6'>" + location_html + "</td>";
 	html += "</tr>";
 	html += "</table>";
