@@ -293,11 +293,10 @@
     });
 
     if (!filtered.length) {
-      document.getElementById('content').innerHTML = `
-        <div class="state-empty">
-          <h3>No events match your filters</h3>
-          <p>Try removing a filter or check back soon.</p>
-        </div>`;
+      const noEvents = !allEvents.length && !typeFilter && !deliveryFilter;
+      document.getElementById('content').innerHTML = noEvents
+        ? `<div class="state-empty"><h3>No upcoming events scheduled</h3><p>Check back soon for new events, or contact <a href="mailto:events@josh.ai">events@josh.ai</a>.</p></div>`
+        : `<div class="state-empty"><h3>No events match your filters</h3><p>Try removing a filter or check back soon.</p></div>`;
       return;
     }
 
@@ -326,7 +325,7 @@
         ? `<p class="card-desc">${esc(ev.description.length > 160 ? ev.description.slice(0,160) + '…' : ev.description)}</p>`
         : '';
 
-      const detailUrl = `${detailBase}?event_id=${esc(ev.id)}${audience ? '&audience=' + esc(audience) : ''}`;
+      const detailUrl = `${detailBase}?event_id=${encodeURIComponent(ev.id)}${audience ? '&audience=' + encodeURIComponent(audience) : ''}`;
 
       const timeDisplay = ev.start_display + (ev.timezone ? ' ' + ev.timezone : '');
 

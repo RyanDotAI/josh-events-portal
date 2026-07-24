@@ -80,8 +80,8 @@ async function crmGet(path, token) {
   return safeJson(res);
 }
 
-async function crmSearch(module, criteria, token) {
-  const d = await crmGet(`${module}/search?criteria=${encodeURIComponent(criteria)}&per_page=10`, token);
+async function crmSearch(module, criteria, token, perPage = 10) {
+  const d = await crmGet(`${module}/search?criteria=${encodeURIComponent(criteria)}&per_page=${perPage}`, token);
   return d.data || [];
 }
 
@@ -233,9 +233,9 @@ function buildEmailContent(ev, registrant_name, reg_email, cancel_url) {
     ol_end     = toOlUtc(endUtc);
   }
 
-  // Description for calendar links
+  // Description for calendar links (truncate description to keep Google Calendar URL under browser limits)
   const cal_desc_parts = [`You are registered for ${ev_name}.`];
-  if (ev.Event_Description) cal_desc_parts.push(ev.Event_Description);
+  if (ev.Event_Description) cal_desc_parts.push(ev.Event_Description.substring(0, 400));
   if (cancel_url) cal_desc_parts.push(`Cancel registration: ${cancel_url}`);
   const cal_desc = cal_desc_parts.join('\n\n');
 
@@ -305,9 +305,11 @@ function buildEmailContent(ev, registrant_name, reg_email, cancel_url) {
     `<td style='padding:12px 0;color:#111111;font-size:15px;line-height:1.6'>${location_html}</td>`,
     "</tr>",
     "</table>",
-    "<p style='color:#555555;font-size:14px;font-weight:bold;margin:0 0 12px'>Add to your calendar:</p>",
-    `<a href="${gcal_url}" style='display:inline-block;background:#000000;color:#ffffff;padding:10px 20px;text-decoration:none;border-radius:4px;font-size:13px;font-weight:bold;margin-right:10px'>Google Calendar</a>`,
-    `<a href="${ol_url}" style='display:inline-block;background:#0078d4;color:#ffffff;padding:10px 20px;text-decoration:none;border-radius:4px;font-size:13px;font-weight:bold'>Outlook Calendar</a>`,
+    ...(gcal_start ? [
+      "<p style='color:#555555;font-size:14px;font-weight:bold;margin:0 0 12px'>Add to your calendar:</p>",
+      `<a href="${gcal_url}" style='display:inline-block;background:#000000;color:#ffffff;padding:10px 20px;text-decoration:none;border-radius:4px;font-size:13px;font-weight:bold;margin-right:10px'>Google Calendar</a>`,
+      `<a href="${ol_url}" style='display:inline-block;background:#0078d4;color:#ffffff;padding:10px 20px;text-decoration:none;border-radius:4px;font-size:13px;font-weight:bold'>Outlook Calendar</a>`,
+    ] : []),
     "</div>",
     "<div style='border-top:1px solid #eeeeee;padding:20px 32px;text-align:center'>",
     "<p style='color:#aaaaaa;font-size:12px;margin:0'>Questions? Email <a href='mailto:sales@josh.ai' style='color:#aaaaaa'>sales@josh.ai</a></p>",
@@ -320,6 +322,18 @@ function buildEmailContent(ev, registrant_name, reg_email, cancel_url) {
 }
 
 // ── ICS builder ───────────────────────────────────────────────────────────────
+
+// RFC 5545 §3.1: fold lines longer than 75 octets with CRLF + single space.
+function foldIcsLine(line) {
+  if (line.length <= 75) return line;
+  let result = line.substring(0, 75);
+  let rest   = line.substring(75);
+  while (rest.length > 0) {
+    result += '\r\n ' + rest.substring(0, 74);
+    rest = rest.substring(74);
+  }
+  return result;
+}
 
 function icsEscape(str) {
   return String(str || '')
@@ -402,7 +416,7 @@ function buildICS({ ev, reg_email, registrant_name, reg_id, cancel_url }) {
     'SEQUENCE:0',
     'END:VEVENT',
     'END:VCALENDAR',
-  ].join('\r\n');
+  ].map(foldIcsLine).join('\r\n');
 }
 
 // ── Email sender ──────────────────────────────────────────────────────────────
@@ -538,7 +552,8 @@ exports.handler = async (event) => {
       const allRegs = await crmSearch(
         'Event_Registrations',
         `((Event:equals:${event_id})AND(Status:not_equal:Cancelled))`,
-        token
+        token,
+        200
       );
       if (allRegs.length >= ev_cap) {
         console.log('REGISTER — event full:', allRegs.length, '/', ev_cap);

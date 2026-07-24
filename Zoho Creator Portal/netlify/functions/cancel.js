@@ -117,7 +117,7 @@ exports.handler = async (event) => {
         headers:    CORS,
         body:       JSON.stringify({
           reg_id:     reg.id,
-          event_name: reg.Event?.name || reg.Name || '',
+          event_name: reg.Event?.name || '',
           status:     reg.Status || '',
         }),
       };
@@ -144,6 +144,12 @@ exports.handler = async (event) => {
       // Verify email against linked Contact or Lead
       const contactId = reg.Contact?.id;
       const leadId    = reg.Lead?.id;
+
+      if (!contactId && !leadId) {
+        console.error('CANCEL — registration', reg_id, 'has no linked Contact or Lead');
+        return { statusCode: 200, headers: CORS, body: JSON.stringify({ status: 'ERROR' }) };
+      }
+
       let registrant_email = '';
       let registrant_name  = '';
 
@@ -168,7 +174,7 @@ exports.handler = async (event) => {
       }
 
       // Update status to Cancelled
-      await fetch(`${ZOHO_CRM}/crm/v6/Event_Registrations/${reg_id}`, {
+      const putRes  = await fetch(`${ZOHO_CRM}/crm/v6/Event_Registrations/${reg_id}`, {
         method:  'PUT',
         headers: {
           Authorization:  `Zoho-oauthtoken ${token}`,
@@ -176,6 +182,12 @@ exports.handler = async (event) => {
         },
         body: JSON.stringify({ data: [{ Status: 'Cancelled' }] }),
       });
+      const putData   = await safeJson(putRes);
+      const putResult = putData.data?.[0];
+      if (!putResult || putResult.status !== 'success') {
+        console.error('CANCEL — Zoho PUT failed:', JSON.stringify(putResult));
+        return { statusCode: 200, headers: CORS, body: JSON.stringify({ status: 'ERROR' }) };
+      }
       console.log('CANCEL — registration', reg_id, 'cancelled for', registrant_email);
 
       const ev_name = reg.Event?.name || '';
