@@ -39,13 +39,11 @@ async function getToken() {
   return d.access_token;
 }
 
-// Build display string from a Zoho DateTime field (only the date portion is used — Zoho never
-// timezone-adjusts the first 10 characters) plus a plain-text local time field (HH:MM).
-// Returns "MM-DD-YYYY at HH:MM" or "MM-DD-YYYY" when no time is set.
-function formatEventDateTime(dateTimeFld, localTimeFld) {
-  if (!dateTimeFld) return '';
-  const datePart = (dateTimeFld || '').substring(0, 10); // "YYYY-MM-DD"
-  const [y, m, d] = datePart.split('-');
+// Build display string from a Zoho Date field ("YYYY-MM-DD") plus a plain-text local time
+// field ("HH:MM"). Returns "MM-DD-YYYY at HH:MM" or "MM-DD-YYYY" when no time is set.
+function formatEventDateTime(dateFld, localTimeFld) {
+  if (!dateFld) return '';
+  const [y, m, d] = (dateFld || '').split('-');
   if (!y || !m || !d) return '';
   const dateStr  = `${m}-${d}-${y}`;
   const timePart = (localTimeFld || '').trim().substring(0, 5); // "HH:MM"
@@ -75,8 +73,8 @@ function mapEvent(ev, full = false) {
     name:            ev.Name          || '',
     type:            ev.Event_Type    || '',
     delivery:        ev.Delivery_Type || '',
-    start_display:   formatEventDateTime(ev.Start_Time, ev.Start_Time_Local),
-    end_display:     formatEventDateTime(ev.End_Time,   ev.End_Time_Local),
+    start_display:   formatEventDateTime(ev.Start_Date, ev.Start_Time_Local),
+    end_display:     formatEventDateTime(ev.End_Date,   ev.End_Time_Local),
     location:        ev.Event_Location_Name              || null,
     city:            ev.Event_Address_City               || null,
     state:           ev.Event_Address_State_Province     || null,
@@ -133,8 +131,8 @@ exports.handler = async (event) => {
     }
 
     const fields = [
-      'id', 'Name', 'Event_Type', 'Delivery_Type', 'Start_Time', 'End_Time',
-      'Start_Time_Local', 'End_Time_Local',
+      'id', 'Name', 'Event_Type', 'Delivery_Type',
+      'Start_Date', 'Start_Time_Local', 'End_Date', 'End_Time_Local',
       'Event_Location_Name', 'Event_Address_City', 'Event_Address_State_Province',
       'Registration_Close_Date', 'Event_Description', 'Capacity', 'Audience_Type',
       'Event_Timezone',

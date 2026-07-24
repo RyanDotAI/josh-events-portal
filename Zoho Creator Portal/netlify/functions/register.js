@@ -196,9 +196,9 @@ function buildEmailContent(ev, registrant_name, reg_email, cancel_url) {
   // Date comes from the first 10 chars of Start_Time ("YYYY-MM-DD") — Zoho never adjusts this
   // portion for timezone. Time comes from Start_Time_Local / End_Time_Local Text fields, which
   // are always the event's local time regardless of which timezone the API user's profile is set to.
-  const startDateStr = (ev.Start_Time || '').substring(0, 10);
+  const startDateStr = ev.Start_Date || '';
   const startTimeStr = (ev.Start_Time_Local || '').trim().substring(0, 5);
-  const endDateStr   = (ev.End_Time || ev.Start_Time || '').substring(0, 10);
+  const endDateStr   = ev.End_Date || ev.Start_Date || '';
   const endTimeStr   = (ev.End_Time_Local || '').trim().substring(0, 5);
 
   let display_date = '';
@@ -334,14 +334,14 @@ function buildICS({ ev, reg_email, registrant_name, reg_id, cancel_url }) {
   const tzIana   = TZ_IANA[tz_raw]  || 'America/Denver';
   const tz_label = TZ_LABEL[tz_raw] || 'MT';
 
-  const startDateStr = (ev.Start_Time || '').substring(0, 10);
+  const startDateStr = ev.Start_Date || '';
   const startTimeStr = (ev.Start_Time_Local || '').trim().substring(0, 5);
   if (!startDateStr || !startTimeStr) return null;
 
   const startUtcDate = localToUtcDate(startDateStr, startTimeStr, tzIana);
   if (!startUtcDate) return null;
 
-  const endDateStr = (ev.End_Time || ev.Start_Time || '').substring(0, 10);
+  const endDateStr = ev.End_Date || ev.Start_Date || '';
   const endTimeStr = (ev.End_Time_Local || '').trim().substring(0, 5);
 
   const start = parseTimeStr(startTimeStr);
