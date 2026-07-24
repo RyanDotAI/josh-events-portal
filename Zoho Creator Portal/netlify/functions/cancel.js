@@ -84,7 +84,7 @@ async function sendCancellationEmail(ev_name, registrant_name, reg_email) {
   ].join('');
 
   await transporter.sendMail({
-    from:    '"Josh.ai Events" <sales@josh.ai>',
+    from:    `"Josh.ai Events" <${gmailUser}>`,
     to:      reg_email,
     replyTo: 'sales@josh.ai',
     subject: `Registration Cancelled: ${ev_name}`,
