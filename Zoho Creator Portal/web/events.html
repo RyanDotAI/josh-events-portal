@@ -318,6 +318,10 @@
         ? `<div class="meta-row"><span class="meta-icon">⏰</span><span>Register by ${esc(fmtDate(ev.close_date))}</span></div>`
         : '';
 
+      const seatsLine = (ev.seats_remaining !== null && ev.capacity && ev.seats_remaining > 0 && ev.seats_remaining < ev.capacity * 0.5)
+        ? `<div class="meta-row"><span class="meta-icon">⚠️</span><span style="color:#b84a00;font-weight:600">Only ${ev.seats_remaining} seat${ev.seats_remaining === 1 ? '' : 's'} remaining</span></div>`
+        : '';
+
       const desc = ev.description
         ? `<p class="card-desc">${esc(ev.description.length > 160 ? ev.description.slice(0,160) + '…' : ev.description)}</p>`
         : '';
@@ -338,6 +342,7 @@
             <div class="meta-row"><span class="meta-icon">📅</span><span>${esc(timeDisplay)}</span></div>
             ${locLine}
             ${closeLine}
+            ${seatsLine}
           </div>
           <a href="${detailUrl}" class="btn btn-primary btn-full">View Details &amp; Register</a>
         </div>`;

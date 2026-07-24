@@ -39,34 +39,53 @@ async function getToken() {
   return d.access_token;
 }
 
-function formatDateTime(dt) {
-  if (!dt) return '';
-  const [datePart, timePart] = dt.split('T');
-  if (!datePart) return '';
-  const [year, month, day] = datePart.split('-');
-  const formatted = year && month && day ? `${month}-${day}-${year}` : datePart;
-  const time = timePart ? timePart.substring(0, 5) : '';
-  return time ? `${formatted} at ${time}` : formatted;
+// Build display string from a Zoho DateTime field (only the date portion is used — Zoho never
+// timezone-adjusts the first 10 characters) plus a plain-text local time field (HH:MM).
+// Returns "MM-DD-YYYY at HH:MM" or "MM-DD-YYYY" when no time is set.
+function formatEventDateTime(dateTimeFld, localTimeFld) {
+  if (!dateTimeFld) return '';
+  const datePart = (dateTimeFld || '').substring(0, 10); // "YYYY-MM-DD"
+  const [y, m, d] = datePart.split('-');
+  if (!y || !m || !d) return '';
+  const dateStr  = `${m}-${d}-${y}`;
+  const timePart = (localTimeFld || '').trim().substring(0, 5); // "HH:MM"
+  return timePart ? `${dateStr} at ${timePart}` : dateStr;
+}
+
+// Fetch the count of active (non-cancelled) registrations for an event.
+async function fetchRegCount(eventId, token) {
+  try {
+    const criteria = `((Event:equals:${eventId})AND(Status:not_equal:Cancelled))`;
+    const url = `${ZOHO_CRM}/crm/v6/Event_Registrations/search`
+      + `?criteria=${encodeURIComponent(criteria)}&per_page=200`;
+    const res = await fetch(url, { headers: { Authorization: `Zoho-oauthtoken ${token}` } });
+    const d   = await res.json();
+    return Array.isArray(d.data) ? d.data.length : 0;
+  } catch (_) {
+    return 0;
+  }
 }
 
 function mapEvent(ev, full = false) {
   const today     = new Date().toISOString().slice(0, 10);
   const closeDate = ev.Registration_Close_Date || '';
+  const capacity  = ev.Capacity ? parseInt(ev.Capacity, 10) : null;
   const out = {
-    id:            ev.id,
-    name:          ev.Name          || '',
-    type:          ev.Event_Type    || '',
-    delivery:      ev.Delivery_Type || '',
-    start_display: formatDateTime(ev.Start_Time),
-    end_display:   formatDateTime(ev.End_Time),
-    location:      ev.Event_Location_Name              || null,
-    city:          ev.Event_Address_City               || null,
-    state:         ev.Event_Address_State_Province     || null,
-    close_date:    closeDate,
-    description:   ev.Event_Description || '',
-    capacity:      ev.Capacity          || null,
-    audience:      ev.Audience_Type     || '',
-    timezone:      TZ_LABEL[ev.Event_Timezone] || '',
+    id:              ev.id,
+    name:            ev.Name          || '',
+    type:            ev.Event_Type    || '',
+    delivery:        ev.Delivery_Type || '',
+    start_display:   formatEventDateTime(ev.Start_Time, ev.Start_Time_Local),
+    end_display:     formatEventDateTime(ev.End_Time,   ev.End_Time_Local),
+    location:        ev.Event_Location_Name              || null,
+    city:            ev.Event_Address_City               || null,
+    state:           ev.Event_Address_State_Province     || null,
+    close_date:      closeDate,
+    description:     ev.Event_Description || '',
+    capacity,
+    audience:        ev.Audience_Type     || '',
+    timezone:        TZ_LABEL[ev.Event_Timezone] || '',
+    seats_remaining: null,
   };
   if (full) {
     out.virtual_link = ev.Virtual_Meeting_Link || null;
@@ -96,7 +115,13 @@ exports.handler = async (event) => {
       if (!ev) {
         return { statusCode: 404, headers: CORS, body: JSON.stringify({ error: 'Event not found' }) };
       }
-      return { statusCode: 200, headers: CORS, body: JSON.stringify(mapEvent(ev, true)) };
+      const mapped = mapEvent(ev, true);
+      if (mapped.capacity) {
+        const count = await fetchRegCount(eventId, token);
+        const remaining = mapped.capacity - count;
+        mapped.seats_remaining = remaining > 0 ? remaining : 0;
+      }
+      return { statusCode: 200, headers: CORS, body: JSON.stringify(mapped) };
     }
 
     // Event list — filter by audience if provided
@@ -109,6 +134,7 @@ exports.handler = async (event) => {
 
     const fields = [
       'id', 'Name', 'Event_Type', 'Delivery_Type', 'Start_Time', 'End_Time',
+      'Start_Time_Local', 'End_Time_Local',
       'Event_Location_Name', 'Event_Address_City', 'Event_Address_State_Province',
       'Registration_Close_Date', 'Event_Description', 'Capacity', 'Audience_Type',
       'Event_Timezone',
@@ -123,10 +149,22 @@ exports.handler = async (event) => {
     const raw     = await res.json();
     const records = raw.data || [];
 
+    const mapped = records.map(ev => mapEvent(ev));
+
+    // Fetch registration counts in parallel for events with capacity set
+    const withCap = mapped.filter(m => m.capacity);
+    if (withCap.length > 0) {
+      const counts = await Promise.all(withCap.map(m => fetchRegCount(m.id, token)));
+      withCap.forEach((m, i) => {
+        const remaining = m.capacity - counts[i];
+        m.seats_remaining = remaining > 0 ? remaining : 0;
+      });
+    }
+
     return {
       statusCode: 200,
       headers:    CORS,
-      body:       JSON.stringify({ events: records.map(ev => mapEvent(ev)) }),
+      body:       JSON.stringify({ events: mapped }),
     };
   } catch (err) {
     console.error('events function error:', err);

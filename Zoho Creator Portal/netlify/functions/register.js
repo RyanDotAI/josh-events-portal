@@ -100,37 +100,25 @@ async function crmCreate(module, record, token) {
 
 // ── Date/time helpers ─────────────────────────────────────────────────────────
 
-// Parse Zoho DateTime ("YYYY-MM-DD HH:MM:SS" or "YYYY-MM-DDTHH:MM:SS") into parts.
-function parseDt(raw) {
-  if (!raw) return null;
-  const clean = raw.replace('T', ' ').substring(0, 19);
-  if (clean.length < 16) return null;
-  return {
-    year:  clean.substring(0, 4),
-    month: clean.substring(5, 7),
-    day:   clean.substring(8, 10),
-    hour:  clean.substring(11, 13),
-    min:   clean.substring(14, 16),
-    sec:   clean.length >= 19 ? clean.substring(17, 19) : '00',
-  };
+// Parse "HH:MM" string to {hour, min} (both zero-padded strings).
+function parseTimeStr(t) {
+  const parts = (t || '00:00').split(':');
+  return { hour: (parts[0] || '0').padStart(2, '0'), min: (parts[1] || '00').padStart(2, '0') };
 }
 
-function to12h(hourStr) {
-  const h = parseInt(hourStr, 10);
-  const ampm = h >= 12 ? 'PM' : 'AM';
-  const h12  = h === 0 ? 12 : h > 12 ? h - 12 : h;
-  return { h12, ampm };
-}
+// Convert an event-local date ("YYYY-MM-DD") + time ("HH:MM") to a UTC Date using the event's
+// IANA timezone. Zoho Text fields are never timezone-adjusted, so these values are always correct
+// regardless of which timezone the API user's Zoho profile is set to.
+function localToUtcDate(dateStr, timeStr, tzIana) {
+  if (!dateStr || !timeStr) return null;
+  const { hour, min } = parseTimeStr(timeStr);
+  const [year, month, day] = dateStr.split('-').map(Number);
+  if (!year || !month || !day) return null;
 
-// Convert a local event time (in a named IANA timezone) to a UTC Date object.
-// Uses Node's built-in Intl API — no timezone library needed.
-function localToUtcDate(year, month, day, hour, min, sec, tzIana) {
-  // Treat the local time as if it were UTC to get a reference point
-  const fakeUtc = new Date(Date.UTC(
-    parseInt(year), parseInt(month) - 1, parseInt(day),
-    parseInt(hour), parseInt(min), parseInt(sec)
-  ));
-  // Format that reference point in the target timezone to see the local offset
+  // Start with a naive guess: treat local time as UTC
+  const naiveUtc = new Date(Date.UTC(year, month - 1, day, parseInt(hour, 10), parseInt(min, 10), 0));
+
+  // Find what local time that UTC instant represents in the event's timezone
   const fmt = new Intl.DateTimeFormat('en-US', {
     timeZone: tzIana,
     year: 'numeric', month: '2-digit', day: '2-digit',
@@ -138,13 +126,20 @@ function localToUtcDate(year, month, day, hour, min, sec, tzIana) {
     hour12: false,
   });
   const parts = {};
-  fmt.formatToParts(fakeUtc).forEach(p => { if (p.type !== 'literal') parts[p.type] = p.value; });
-  const tzHour = parseInt(parts.hour, 10) % 24;
-  const offsetMs = fakeUtc.getTime() - Date.UTC(
-    parseInt(parts.year), parseInt(parts.month) - 1, parseInt(parts.day),
-    tzHour, parseInt(parts.minute), parseInt(parts.second)
-  );
-  return new Date(fakeUtc.getTime() + offsetMs);
+  fmt.formatToParts(naiveUtc).forEach(p => { if (p.type !== 'literal') parts[p.type] = p.value; });
+  const localH = parseInt(parts.hour, 10) % 24;
+  const localM = parseInt(parts.minute, 10);
+
+  // Shift naiveUtc by the difference to land on the correct UTC instant
+  const diffMs = ((parseInt(hour, 10) - localH) * 60 + (parseInt(min, 10) - localM)) * 60 * 1000;
+  return new Date(naiveUtc.getTime() + diffMs);
+}
+
+function to12h(hourStr) {
+  const h = parseInt(hourStr, 10);
+  const ampm = h >= 12 ? 'PM' : 'AM';
+  const h12  = h === 0 ? 12 : h > 12 ? h - 12 : h;
+  return { h12, ampm };
 }
 
 // Format a UTC Date as "YYYYMMDDTHHmmssZ" for Google Calendar URLs.
@@ -198,29 +193,40 @@ function buildEmailContent(ev, registrant_name, reg_email, cancel_url) {
   const addrParts = [loc_name, loc_bldg, loc_street, cityStateZip, loc_country].filter(Boolean);
   const addr_full = addrParts.join(', ');
 
-  // Display date/time
-  const start = parseDt(ev.Start_Time);
-  const end   = parseDt(ev.End_Time);
+  // Date comes from the first 10 chars of Start_Time ("YYYY-MM-DD") — Zoho never adjusts this
+  // portion for timezone. Time comes from Start_Time_Local / End_Time_Local Text fields, which
+  // are always the event's local time regardless of which timezone the API user's profile is set to.
+  const startDateStr = (ev.Start_Time || '').substring(0, 10);
+  const startTimeStr = (ev.Start_Time_Local || '').trim().substring(0, 5);
+  const endDateStr   = (ev.End_Time || ev.Start_Time || '').substring(0, 10);
+  const endTimeStr   = (ev.End_Time_Local || '').trim().substring(0, 5);
 
   let display_date = '';
   let display_time = '';
   let cal_title    = ev_name;
   let gcal_start = '', gcal_end = '', ol_start = '', ol_end = '';
 
-  if (start) {
+  if (startDateStr && startTimeStr) {
+    const start    = parseTimeStr(startTimeStr);
+    const startUtc = localToUtcDate(startDateStr, startTimeStr, tz_iana);
+
+    let end, endUtc;
+    if (endTimeStr) {
+      end    = parseTimeStr(endTimeStr);
+      endUtc = localToUtcDate(endDateStr, endTimeStr, tz_iana);
+    } else {
+      endUtc = new Date(startUtc.getTime() + 60 * 60 * 1000);
+      end = { hour: String((parseInt(start.hour, 10) + 1) % 24).padStart(2, '0'), min: start.min };
+    }
+
     const { h12: sh, ampm: sa } = to12h(start.hour);
-    const monthName = MONTH_NAMES[parseInt(start.month, 10)] || start.month;
-    display_date = `${monthName} ${start.day}, ${start.year}`;
+    const { h12: eh, ampm: ea } = to12h(end.hour);
+    const [y, m, d] = startDateStr.split('-');
+    const monthName = MONTH_NAMES[parseInt(m, 10)] || m;
+    display_date = `${monthName} ${parseInt(d, 10)}, ${y}`;
+    display_time = `${sh}:${start.min} ${sa} – ${eh}:${end.min} ${ea} ${tz_label}`;
+    cal_title    = `${ev_name} - ${buildCompactTime(start, end, tz_label)}`;
 
-    // For display: keep local time as-is
-    const endParts = end || { ...start, hour: String(parseInt(start.hour, 10) + 1).padStart(2, '0') };
-    const { h12: eh, ampm: ea } = to12h(endParts.hour);
-    display_time = `${sh}:${start.min} ${sa} – ${eh}:${endParts.min} ${ea} ${tz_label}`;
-    cal_title    = `${ev_name} - ${buildCompactTime(start, endParts, tz_label)}`;
-
-    // For calendar links: convert to UTC so the time is correct for any viewer's timezone
-    const startUtc = localToUtcDate(start.year, start.month, start.day, start.hour, start.min, start.sec, tz_iana);
-    const endUtc   = localToUtcDate(endParts.year, endParts.month, endParts.day, endParts.hour, endParts.min, endParts.sec, tz_iana);
     gcal_start = toGcalUtc(startUtc);
     gcal_end   = toGcalUtc(endUtc);
     ol_start   = toOlUtc(startUtc);
@@ -324,14 +330,29 @@ function icsEscape(str) {
 }
 
 function buildICS({ ev, reg_email, registrant_name, reg_id, cancel_url }) {
-  const start  = parseDt(ev.Start_Time);
-  const end    = parseDt(ev.End_Time);
-  if (!start) return null;
-
-  const endParts = end || { ...start, hour: String(parseInt(start.hour, 10) + 1).padStart(2, '0') };
   const tz_raw   = ev.Event_Timezone || '';
   const tzIana   = TZ_IANA[tz_raw]  || 'America/Denver';
   const tz_label = TZ_LABEL[tz_raw] || 'MT';
+
+  const startDateStr = (ev.Start_Time || '').substring(0, 10);
+  const startTimeStr = (ev.Start_Time_Local || '').trim().substring(0, 5);
+  if (!startDateStr || !startTimeStr) return null;
+
+  const startUtcDate = localToUtcDate(startDateStr, startTimeStr, tzIana);
+  if (!startUtcDate) return null;
+
+  const endDateStr = (ev.End_Time || ev.Start_Time || '').substring(0, 10);
+  const endTimeStr = (ev.End_Time_Local || '').trim().substring(0, 5);
+
+  const start = parseTimeStr(startTimeStr);
+  let end, endUtcDate;
+  if (endTimeStr) {
+    end        = parseTimeStr(endTimeStr);
+    endUtcDate = localToUtcDate(endDateStr, endTimeStr, tzIana);
+  } else {
+    endUtcDate = new Date(startUtcDate.getTime() + 60 * 60 * 1000);
+    end = { hour: String((parseInt(start.hour, 10) + 1) % 24).padStart(2, '0'), min: start.min };
+  }
 
   const ev_delivery = ev.Delivery_Type || '';
   const ev_vlink    = ev.Virtual_Meeting_Link || '';
@@ -347,14 +368,12 @@ function buildICS({ ev, reg_email, registrant_name, reg_id, cancel_url }) {
   const addrParts = [loc_name, loc_bldg, loc_street, cityStateZip, loc_country].filter(Boolean);
   const location = ev_delivery === 'Virtual' ? ev_vlink : addrParts.join(', ');
 
-  const startUtc = localToUtcDate(start.year, start.month, start.day, start.hour, start.min, start.sec, tzIana);
-  const endUtc   = localToUtcDate(endParts.year, endParts.month, endParts.day, endParts.hour, endParts.min, endParts.sec || '00', tzIana);
-  const dtStart  = toGcalUtc(startUtc);
-  const dtEnd    = toGcalUtc(endUtc);
+  const dtStart = toGcalUtc(startUtcDate);
+  const dtEnd   = toGcalUtc(endUtcDate);
   const now      = new Date();
   const dtstamp  = now.toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
   const ev_name       = (ev.Name || '').replace(/[\\;,]/g, ' ');
-  const compact_time  = buildCompactTime(start, endParts, tz_label);
+  const compact_time  = buildCompactTime(start, end, tz_label);
   const summary_title = `${ev_name} - ${compact_time}`;
   const safe_loc      = location.replace(/[\\;,]/g, ' ');
 

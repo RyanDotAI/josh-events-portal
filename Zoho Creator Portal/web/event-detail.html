@@ -278,6 +278,7 @@
           ${locationHtml}
           ${ev.close_date ? `<div class="meta-item"><label>Register By</label><div class="meta-value">${esc(fmtDate(ev.close_date))}</div></div>` : ''}
           ${ev.capacity ? `<div class="meta-item"><label>Capacity</label><div class="meta-value">${esc(String(ev.capacity))} attendees</div></div>` : ''}
+          ${(ev.seats_remaining !== null && ev.capacity && ev.seats_remaining > 0 && ev.seats_remaining < ev.capacity * 0.5) ? `<div class="meta-item"><label>Availability</label><div class="meta-value" style="color:#b84a00;font-weight:700">Only ${ev.seats_remaining} seat${ev.seats_remaining === 1 ? '' : 's'} remaining</div></div>` : ''}
         </div>
         ${descHtml}
       </div>
