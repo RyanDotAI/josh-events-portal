@@ -307,10 +307,11 @@
                           : ev.delivery === 'Hybrid'    ? 'badge-hybrid'
                           : 'badge-virtual';
 
+      const cityState = [ev.city, ev.state].filter(Boolean).map(s => esc(s)).join(', ');
       const locLine = ev.delivery === 'Virtual'
         ? `<div class="meta-row"><span class="meta-icon">💻</span><span>Virtual event</span></div>`
-        : ev.location
-        ? `<div class="meta-row"><span class="meta-icon">📍</span><span>${esc(ev.location)}</span></div>`
+        : (ev.location || cityState)
+        ? `<div class="meta-row"><span class="meta-icon">📍</span><div>${ev.location ? esc(ev.location) : ''}${ev.location && cityState ? '<br>' : ''}<span style="color:#888;font-size:12px">${cityState}</span></div></div>`
         : '';
 
       const closeLine = ev.close_date
