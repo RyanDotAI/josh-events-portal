@@ -240,7 +240,6 @@
       <div class="state-box">
         <h2>Something went wrong</h2>
         <p>${msg}</p>
-        <a href="/events.html" class="btn btn-secondary" style="margin-top:8px">View Events</a>
       </div>`;
   }
 
@@ -249,7 +248,6 @@
       <div class="state-box">
         <h2>Already Cancelled</h2>
         <p>Your registration${event_name ? ` for <strong>${esc(event_name)}</strong>` : ''} has already been cancelled.</p>
-        <a href="/events.html" class="btn btn-primary" style="margin-top:8px">View Upcoming Events</a>
       </div>`;
   }
 
@@ -268,7 +266,7 @@
           </div>
           <div class="actions">
             <button type="submit" id="submitBtn" class="btn btn-danger">Cancel My Registration</button>
-            <a href="/events.html" class="btn btn-secondary">Keep My Registration</a>
+            <button type="button" class="btn btn-secondary" onclick="history.back()">Keep My Registration</button>
           </div>
         </form>
       </div>`;
@@ -280,7 +278,6 @@
         <div class="success-icon">✓</div>
         <h2>Registration Cancelled</h2>
         <p>Your registration${event_name ? ` for <strong>${esc(event_name)}</strong>` : ''} has been cancelled. A confirmation email has been sent.</p>
-        <a href="/events.html" class="btn btn-primary" style="margin-top:8px; display:inline-block">View Upcoming Events</a>
       </div>`;
   }
 

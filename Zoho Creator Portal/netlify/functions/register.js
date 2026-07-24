@@ -441,7 +441,7 @@ async function sendConfirmationEmail(ev, registrant_name, reg_email, reg_id) {
   const ics = buildICS({ ev, reg_email, registrant_name, reg_id, cancel_url });
 
   const mailOptions = {
-    from:    `"Josh.ai Events" <${gmailUser}>`,
+    from:    '"Josh.ai Events" <sales@josh.ai>',
     to:      reg_email,
     replyTo: 'sales@josh.ai',
     subject,
