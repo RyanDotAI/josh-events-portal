@@ -28,3 +28,9 @@
   from = "/api/cancel"
   to   = "/.netlify/functions/cancel"
   status = 200
+
+# Route /api/checkin to checkin function
+[[redirects]]
+  from = "/api/checkin"
+  to   = "/.netlify/functions/checkin"
+  status = 200

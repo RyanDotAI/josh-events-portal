@@ -1,0 +1,590 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+  <title>Check In — Josh.ai</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+      background: #f5f5f5;
+      color: #111;
+      -webkit-font-smoothing: antialiased;
+      min-height: 100dvh;
+    }
+
+    /* ── Header ── */
+    .site-header {
+      background: #000;
+      padding: 0 24px;
+      height: 56px;
+      display: flex;
+      align-items: center;
+    }
+    .logo {
+      color: #fff;
+      font-size: 17px;
+      font-weight: 700;
+      letter-spacing: -0.4px;
+    }
+
+    /* ── Steps wrapper ── */
+    .step {
+      display: none;
+      min-height: calc(100dvh - 56px);
+      flex-direction: column;
+    }
+    .step.active { display: flex; }
+
+    /* ── Loading ── */
+    #step-loading {
+      align-items: center;
+      justify-content: center;
+      gap: 16px;
+    }
+    .spinner {
+      width: 36px; height: 36px;
+      border: 3px solid #ddd;
+      border-top-color: #000;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── No events ── */
+    #step-no-events {
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      padding: 40px 32px;
+    }
+    .no-events-icon { font-size: 48px; margin-bottom: 16px; }
+    .no-events-title { font-size: 20px; font-weight: 700; margin-bottom: 8px; }
+    .no-events-sub { font-size: 15px; color: #666; line-height: 1.5; }
+
+    /* ── Event selection ── */
+    #step-events {
+      padding: 28px 20px 40px;
+      flex-direction: column;
+    }
+    .step-label {
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      color: #999;
+      margin-bottom: 10px;
+    }
+    .step-title {
+      font-size: 26px;
+      font-weight: 700;
+      letter-spacing: -0.5px;
+      margin-bottom: 24px;
+      line-height: 1.2;
+    }
+    .event-list { display: flex; flex-direction: column; gap: 12px; }
+    .event-btn {
+      background: #fff;
+      border: 2px solid #e5e5e5;
+      border-radius: 12px;
+      padding: 18px 20px;
+      text-align: left;
+      cursor: pointer;
+      transition: border-color 0.15s, box-shadow 0.15s;
+      width: 100%;
+    }
+    .event-btn:active { background: #f8f8f8; }
+    .event-btn:hover { border-color: #000; box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
+    .event-btn-name {
+      font-size: 17px;
+      font-weight: 700;
+      color: #111;
+      margin-bottom: 4px;
+      line-height: 1.3;
+    }
+    .event-btn-meta {
+      font-size: 13px;
+      color: #666;
+      line-height: 1.5;
+    }
+
+    /* ── Email step ── */
+    #step-email {
+      padding: 28px 20px 40px;
+      flex-direction: column;
+    }
+    .selected-event-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: #f0f0f0;
+      border-radius: 20px;
+      padding: 6px 14px;
+      font-size: 13px;
+      font-weight: 600;
+      color: #444;
+      margin-bottom: 28px;
+      max-width: 100%;
+    }
+    .selected-event-pill .change-btn {
+      color: #0066cc;
+      cursor: pointer;
+      font-size: 12px;
+      white-space: nowrap;
+      background: none;
+      border: none;
+      padding: 0;
+      font-weight: 600;
+    }
+    .field-label {
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: #777;
+      margin-bottom: 8px;
+    }
+    .big-input {
+      width: 100%;
+      padding: 16px 18px;
+      border: 2px solid #ddd;
+      border-radius: 10px;
+      font-size: 17px;
+      color: #111;
+      background: #fff;
+      transition: border-color 0.15s;
+      -webkit-appearance: none;
+    }
+    .big-input:focus { outline: none; border-color: #000; }
+    .big-input.error { border-color: #e53e3e; }
+
+    .primary-btn {
+      display: block;
+      width: 100%;
+      padding: 16px;
+      background: #000;
+      color: #fff;
+      font-size: 17px;
+      font-weight: 700;
+      border: none;
+      border-radius: 10px;
+      cursor: pointer;
+      margin-top: 16px;
+      transition: opacity 0.15s;
+      letter-spacing: -0.2px;
+    }
+    .primary-btn:active { opacity: 0.85; }
+    .primary-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    .error-msg {
+      font-size: 13px;
+      color: #c0392b;
+      margin-top: 8px;
+      display: none;
+    }
+
+    /* ── Success ── */
+    #step-success {
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      padding: 40px 28px;
+      background: #fff;
+      flex-direction: column;
+    }
+    .success-icon {
+      width: 80px; height: 80px;
+      background: #111;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 24px;
+    }
+    .success-icon svg { width: 40px; height: 40px; }
+    .success-title {
+      font-size: 28px;
+      font-weight: 700;
+      letter-spacing: -0.6px;
+      margin-bottom: 8px;
+    }
+    .success-name {
+      font-size: 22px;
+      font-weight: 700;
+      color: #000;
+      margin-bottom: 6px;
+    }
+    .success-event {
+      font-size: 15px;
+      color: #666;
+      margin-bottom: 0;
+      line-height: 1.5;
+    }
+    .already-tag {
+      display: inline-block;
+      background: #fff8e6;
+      color: #7a4e0a;
+      border-radius: 20px;
+      padding: 6px 16px;
+      font-size: 13px;
+      font-weight: 600;
+      margin-top: 16px;
+    }
+
+    /* ── Walk-in form ── */
+    #step-walkin {
+      padding: 28px 20px 40px;
+      flex-direction: column;
+    }
+    .walkin-notice {
+      background: #fff8e6;
+      border-radius: 10px;
+      padding: 14px 16px;
+      margin-bottom: 24px;
+      font-size: 14px;
+      color: #7a4e0a;
+      line-height: 1.5;
+    }
+    .walkin-notice strong { font-weight: 700; }
+
+    .form-row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .form-group { margin-bottom: 14px; }
+    .std-input {
+      width: 100%;
+      padding: 13px 16px;
+      border: 2px solid #ddd;
+      border-radius: 10px;
+      font-size: 15px;
+      color: #111;
+      background: #fff;
+      transition: border-color 0.15s;
+      -webkit-appearance: none;
+    }
+    .std-input:focus { outline: none; border-color: #000; }
+    .std-input.error { border-color: #e53e3e; }
+    .std-input:disabled { background: #f5f5f5; color: #999; }
+
+    /* ── Walk-in success ── */
+    #step-walkin-success {
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      padding: 40px 28px;
+      background: #fff;
+      flex-direction: column;
+    }
+    .walkin-success-tag {
+      display: inline-block;
+      background: #e6f7ee;
+      color: #1a5c35;
+      border-radius: 20px;
+      padding: 6px 16px;
+      font-size: 13px;
+      font-weight: 600;
+      margin-top: 16px;
+    }
+
+    @media (max-width: 380px) {
+      .form-row-2 { grid-template-columns: 1fr; }
+      .step-title  { font-size: 22px; }
+    }
+  </style>
+</head>
+<body>
+
+<header class="site-header">
+  <span class="logo">Josh.ai</span>
+</header>
+
+<!-- Loading -->
+<div class="step active" id="step-loading">
+  <div class="spinner"></div>
+  <p style="color:#999;font-size:15px">Loading events…</p>
+</div>
+
+<!-- No events today -->
+<div class="step" id="step-no-events">
+  <div class="no-events-icon">📅</div>
+  <div class="no-events-title">No Events Today</div>
+  <p class="no-events-sub">There are no scheduled events for today.<br>Contact <a href="mailto:events@josh.ai" style="color:#000">events@josh.ai</a> if you need assistance.</p>
+</div>
+
+<!-- Select event (only shown if multiple today) -->
+<div class="step" id="step-events">
+  <div class="step-label">Check In</div>
+  <div class="step-title">Which event are you attending?</div>
+  <div class="event-list" id="eventList"></div>
+</div>
+
+<!-- Email entry -->
+<div class="step" id="step-email">
+  <div class="step-label">Check In</div>
+  <div class="step-title">Enter your email</div>
+  <div class="selected-event-pill" id="selectedEventPill">
+    <span id="selectedEventName" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></span>
+    <button class="change-btn" id="changeEventBtn" style="display:none" onclick="goBack()">Change</button>
+  </div>
+  <div class="field-label">Email Address</div>
+  <input type="email" class="big-input" id="emailInput" placeholder="you@example.com"
+         autocomplete="email" autocapitalize="off" inputmode="email">
+  <div class="error-msg" id="emailError">Please enter a valid email address.</div>
+  <button class="primary-btn" id="checkInBtn" onclick="submitEmail()">Check In</button>
+</div>
+
+<!-- Success -->
+<div class="step" id="step-success">
+  <div class="success-icon">
+    <svg viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path d="M8 20L16 28L32 12" stroke="white" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
+  </div>
+  <div class="success-title" id="successTitle">You're checked in!</div>
+  <div class="success-name" id="successName"></div>
+  <div class="success-event" id="successEvent"></div>
+  <div id="alreadyTag" style="display:none" class="already-tag">Already checked in</div>
+</div>
+
+<!-- Walk-in form -->
+<div class="step" id="step-walkin">
+  <div class="step-label">Walk-In Registration</div>
+  <div class="step-title">Let's get you registered</div>
+  <div class="walkin-notice">
+    <strong>No registration on file</strong> for that email. Fill in your details below and we'll check you in now.
+  </div>
+  <div class="form-row-2">
+    <div class="form-group">
+      <div class="field-label">First Name *</div>
+      <input type="text" class="std-input" id="wiFirstName" autocomplete="given-name">
+    </div>
+    <div class="form-group">
+      <div class="field-label">Last Name *</div>
+      <input type="text" class="std-input" id="wiLastName" autocomplete="family-name">
+    </div>
+  </div>
+  <div class="form-group">
+    <div class="field-label">Email</div>
+    <input type="email" class="std-input" id="wiEmail" disabled autocomplete="email">
+  </div>
+  <div class="form-group">
+    <div class="field-label">Company</div>
+    <input type="text" class="std-input" id="wiCompany" autocomplete="organization" placeholder="Optional">
+  </div>
+  <div class="error-msg" id="wiError">Please fill in your first and last name.</div>
+  <button class="primary-btn" id="wiSubmitBtn" onclick="submitWalkIn()">Complete Check-In</button>
+</div>
+
+<!-- Walk-in success -->
+<div class="step" id="step-walkin-success">
+  <div class="success-icon">
+    <svg viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path d="M8 20L16 28L32 12" stroke="white" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
+  </div>
+  <div class="success-title">Welcome!</div>
+  <div class="success-name" id="wiSuccessName"></div>
+  <div class="success-event" id="wiSuccessEvent"></div>
+  <div class="walkin-success-tag">Walk-in registration complete</div>
+</div>
+
+<script>
+  const API_BASE = '/api';
+
+  let selectedEvent  = null;
+  let todayEvents    = [];
+  let checkinEmail   = '';
+
+  function show(stepId) {
+    document.querySelectorAll('.step').forEach(s => s.classList.remove('active'));
+    document.getElementById(stepId).classList.add('active');
+  }
+
+  // ── Load today's events ────────────────────────────────────
+  async function init() {
+    try {
+      const res  = await fetch(`${API_BASE}/checkin`);
+      const data = await res.json();
+      todayEvents = data.events || [];
+
+      if (todayEvents.length === 0) {
+        show('step-no-events');
+      } else if (todayEvents.length === 1) {
+        selectEvent(todayEvents[0], false);
+      } else {
+        renderEventList();
+        show('step-events');
+      }
+    } catch (err) {
+      show('step-no-events');
+    }
+  }
+
+  function renderEventList() {
+    const list = document.getElementById('eventList');
+    list.innerHTML = todayEvents.map(ev => {
+      const loc = ev.delivery === 'Virtual'
+        ? 'Virtual'
+        : [ev.location, ev.city, ev.state].filter(Boolean).join(', ');
+      const time = ev.start_display + (ev.timezone ? ' ' + ev.timezone : '');
+      return `
+        <button class="event-btn" onclick="selectEvent(${esc(JSON.stringify(ev))}, true)">
+          <div class="event-btn-name">${esc(ev.name)}</div>
+          <div class="event-btn-meta">${esc(time)}${loc ? ' · ' + esc(loc) : ''}</div>
+        </button>`;
+    }).join('');
+  }
+
+  function selectEvent(ev, showBack) {
+    selectedEvent = ev;
+    document.getElementById('selectedEventName').textContent = ev.name;
+    document.getElementById('changeEventBtn').style.display = showBack ? 'inline' : 'none';
+    show('step-email');
+    setTimeout(() => document.getElementById('emailInput').focus(), 100);
+  }
+
+  function goBack() {
+    document.getElementById('emailInput').value = '';
+    document.getElementById('emailError').style.display = 'none';
+    document.getElementById('emailInput').classList.remove('error');
+    show('step-events');
+  }
+
+  // ── Email check-in ─────────────────────────────────────────
+  async function submitEmail() {
+    const emailEl = document.getElementById('emailInput');
+    const email   = emailEl.value.trim();
+
+    emailEl.classList.remove('error');
+    document.getElementById('emailError').style.display = 'none';
+
+    if (!email || !email.includes('@')) {
+      emailEl.classList.add('error');
+      document.getElementById('emailError').style.display = 'block';
+      emailEl.focus();
+      return;
+    }
+
+    checkinEmail = email;
+
+    const btn = document.getElementById('checkInBtn');
+    btn.disabled    = true;
+    btn.textContent = 'Checking in…';
+
+    try {
+      const res  = await fetch(`${API_BASE}/checkin`, {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ event_id: selectedEvent.id, email }),
+      });
+      const data = await res.json();
+      handleCheckinResult(data);
+    } catch (err) {
+      showEmailError('Something went wrong. Please try again.');
+    } finally {
+      btn.disabled    = false;
+      btn.textContent = 'Check In';
+    }
+  }
+
+  function handleCheckinResult(data) {
+    if (data.status === 'SUCCESS') {
+      showSuccess(data.name, false);
+    } else if (data.status === 'ALREADY_CHECKED_IN') {
+      showSuccess(data.name, true);
+    } else if (data.status === 'NOT_REGISTERED') {
+      // Pre-fill walk-in form
+      document.getElementById('wiEmail').value   = checkinEmail;
+      document.getElementById('wiFirstName').value = '';
+      document.getElementById('wiLastName').value  = '';
+      document.getElementById('wiCompany').value   = '';
+      document.getElementById('wiError').style.display = 'none';
+      show('step-walkin');
+      setTimeout(() => document.getElementById('wiFirstName').focus(), 100);
+    } else {
+      showEmailError('Something went wrong. Please try again or see a Josh.ai team member.');
+    }
+  }
+
+  function showSuccess(name, alreadyIn) {
+    document.getElementById('successName').textContent  = name || '';
+    document.getElementById('successEvent').textContent = selectedEvent.name;
+    document.getElementById('successTitle').textContent = alreadyIn ? 'Already checked in' : 'You\'re checked in!';
+    document.getElementById('alreadyTag').style.display = alreadyIn ? 'inline-block' : 'none';
+    show('step-success');
+  }
+
+  function showEmailError(msg) {
+    const el = document.getElementById('emailError');
+    el.textContent    = msg;
+    el.style.display  = 'block';
+    document.getElementById('emailInput').classList.add('error');
+  }
+
+  // ── Walk-in ────────────────────────────────────────────────
+  async function submitWalkIn() {
+    const first   = document.getElementById('wiFirstName').value.trim();
+    const last    = document.getElementById('wiLastName').value.trim();
+    const email   = document.getElementById('wiEmail').value.trim();
+    const company = document.getElementById('wiCompany').value.trim();
+    const errEl   = document.getElementById('wiError');
+
+    errEl.style.display = 'none';
+    ['wiFirstName','wiLastName'].forEach(id => document.getElementById(id).classList.remove('error'));
+
+    let valid = true;
+    if (!first) { document.getElementById('wiFirstName').classList.add('error'); valid = false; }
+    if (!last)  { document.getElementById('wiLastName').classList.add('error');  valid = false; }
+    if (!valid) { errEl.style.display = 'block'; return; }
+
+    const btn = document.getElementById('wiSubmitBtn');
+    btn.disabled    = true;
+    btn.textContent = 'Checking in…';
+
+    try {
+      const res  = await fetch(`${API_BASE}/checkin`, {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({
+          event_id:   selectedEvent.id,
+          first_name: first,
+          last_name:  last,
+          email,
+          company,
+        }),
+      });
+      const data = await res.json();
+
+      if (data.status === 'SUCCESS' || data.status === 'ALREADY_CHECKED_IN') {
+        document.getElementById('wiSuccessName').textContent  = data.name || `${first} ${last}`.trim();
+        document.getElementById('wiSuccessEvent').textContent = selectedEvent.name;
+        show('step-walkin-success');
+      } else {
+        errEl.textContent   = 'Something went wrong. Please see a Josh.ai team member.';
+        errEl.style.display = 'block';
+        btn.disabled        = false;
+        btn.textContent     = 'Complete Check-In';
+      }
+    } catch (err) {
+      errEl.textContent   = 'Something went wrong. Please see a Josh.ai team member.';
+      errEl.style.display = 'block';
+      btn.disabled        = false;
+      btn.textContent     = 'Complete Check-In';
+    }
+  }
+
+  // Allow pressing Enter on email input
+  document.getElementById('emailInput').addEventListener('keydown', e => {
+    if (e.key === 'Enter') submitEmail();
+  });
+
+  function esc(str) {
+    return String(str)
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+      .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+  }
+
+  init();
+</script>
+</body>
+</html>

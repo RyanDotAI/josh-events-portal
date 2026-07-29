@@ -1,0 +1,643 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Staff Check-In — Josh.ai</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+      background: #f5f5f5;
+      color: #111;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* ── Header ── */
+    .site-header {
+      background: #000;
+      padding: 0 24px;
+      height: 56px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+    .logo { color: #fff; font-size: 17px; font-weight: 700; letter-spacing: -0.4px; }
+    .header-right { color: rgba(255,255,255,0.5); font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.6px; }
+
+    /* ── Controls bar ── */
+    .controls {
+      background: #fff;
+      border-bottom: 1px solid #e5e5e5;
+      padding: 14px 24px;
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+    .controls select, .controls input[type="date"] {
+      padding: 8px 12px;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      font-size: 13px;
+      background: #fff;
+      color: #111;
+      cursor: pointer;
+      appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23666' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 10px center;
+      padding-right: 28px;
+    }
+    .controls select:focus, .controls input[type="date"]:focus { outline: 2px solid #000; outline-offset: 1px; }
+
+    /* ── Stats bar ── */
+    .stats-bar {
+      background: #111;
+      color: #fff;
+      padding: 12px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+    }
+    .stats-numbers { display: flex; gap: 24px; align-items: center; }
+    .stat { display: flex; flex-direction: column; }
+    .stat-value { font-size: 22px; font-weight: 700; letter-spacing: -0.5px; line-height: 1.1; }
+    .stat-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.6px; color: rgba(255,255,255,0.5); margin-top: 2px; }
+    .stat-divider { width: 1px; height: 32px; background: rgba(255,255,255,0.15); }
+
+    .walkin-btn {
+      background: #fff;
+      color: #000;
+      border: none;
+      border-radius: 6px;
+      padding: 9px 16px;
+      font-size: 13px;
+      font-weight: 700;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: opacity 0.15s;
+    }
+    .walkin-btn:hover { opacity: 0.85; }
+
+    /* ── Search ── */
+    .search-bar {
+      padding: 12px 24px;
+      background: #fff;
+      border-bottom: 1px solid #e5e5e5;
+    }
+    .search-input {
+      width: 100%;
+      padding: 10px 14px 10px 36px;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      font-size: 14px;
+      background: #f8f8f8 url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23999' stroke-width='2'%3E%3Ccircle cx='11' cy='11' r='8'/%3E%3Cline x1='21' y1='21' x2='16.65' y2='16.65'/%3E%3C/svg%3E") no-repeat 10px center;
+      color: #111;
+    }
+    .search-input:focus { outline: 2px solid #000; outline-offset: 1px; background-color: #fff; }
+
+    /* ── Main content ── */
+    .main { max-width: 900px; margin: 0 auto; }
+
+    /* ── States ── */
+    .state-msg {
+      text-align: center;
+      padding: 60px 24px;
+      color: #999;
+    }
+    .state-msg h3 { font-size: 17px; color: #555; margin-bottom: 6px; }
+    .spinner {
+      width: 28px; height: 28px;
+      border: 3px solid #eee;
+      border-top-color: #000;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      margin: 0 auto 12px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Roster ── */
+    .roster { padding: 0 24px 80px; }
+    .roster-section-label {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.7px;
+      color: #999;
+      padding: 16px 0 8px;
+    }
+
+    .reg-row {
+      background: #fff;
+      border-radius: 8px;
+      padding: 14px 16px;
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+    }
+    .reg-row.attended { opacity: 0.7; }
+
+    .reg-name {
+      flex: 1;
+      font-size: 15px;
+      font-weight: 600;
+      color: #111;
+      min-width: 0;
+    }
+    .reg-time {
+      font-size: 11px;
+      color: #888;
+      margin-top: 2px;
+      font-weight: 400;
+    }
+
+    .status-badge {
+      padding: 3px 10px;
+      border-radius: 20px;
+      font-size: 11px;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+    .badge-registered { background: #e8f0ff; color: #1a40a0; }
+    .badge-attended   { background: #e6f7ee; color: #1a5c35; }
+    .badge-other      { background: #f0f0f0; color: #555; }
+
+    .checkin-btn {
+      padding: 8px 16px;
+      background: #000;
+      color: #fff;
+      border: none;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: opacity 0.15s;
+      flex-shrink: 0;
+    }
+    .checkin-btn:hover { opacity: 0.8; }
+    .checkin-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+
+    .no-match {
+      text-align: center;
+      padding: 40px 24px;
+      color: #999;
+      font-size: 14px;
+    }
+
+    /* ── Modal ── */
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.5);
+      z-index: 200;
+      align-items: flex-end;
+      justify-content: center;
+    }
+    .modal-overlay.open { display: flex; }
+    .modal {
+      background: #fff;
+      border-radius: 16px 16px 0 0;
+      padding: 24px 24px 40px;
+      width: 100%;
+      max-width: 540px;
+      max-height: 90dvh;
+      overflow-y: auto;
+    }
+    .modal-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 20px;
+    }
+    .modal-title { font-size: 18px; font-weight: 700; }
+    .modal-close {
+      background: #f0f0f0;
+      border: none;
+      width: 30px; height: 30px;
+      border-radius: 50%;
+      cursor: pointer;
+      font-size: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #555;
+    }
+    .form-row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .form-group { margin-bottom: 14px; }
+    .field-label {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: #777;
+      margin-bottom: 6px;
+    }
+    .std-input {
+      width: 100%;
+      padding: 11px 14px;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      font-size: 14px;
+      color: #111;
+      background: #fafafa;
+      transition: border-color 0.15s;
+    }
+    .std-input:focus { outline: none; border-color: #000; background: #fff; }
+    .std-input.error { border-color: #e53e3e; }
+    .modal-error {
+      font-size: 13px;
+      color: #c0392b;
+      margin-bottom: 10px;
+      display: none;
+    }
+    .modal-submit {
+      width: 100%;
+      padding: 13px;
+      background: #000;
+      color: #fff;
+      font-size: 15px;
+      font-weight: 700;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: opacity 0.15s;
+    }
+    .modal-submit:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    @media (min-width: 640px) {
+      .modal { border-radius: 16px; margin-bottom: 40px; }
+    }
+    @media (max-width: 500px) {
+      .controls { padding: 12px 16px; }
+      .stats-bar { padding: 12px 16px; }
+      .search-bar { padding: 10px 16px; }
+      .roster { padding: 0 16px 80px; }
+      .form-row-2 { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+<header class="site-header">
+  <span class="logo">Josh.ai</span>
+  <span class="header-right">Staff Check-In</span>
+</header>
+
+<!-- Controls -->
+<div class="controls">
+  <input type="date" id="datePicker">
+  <select id="eventSelect" style="min-width:200px">
+    <option value="">— Select an event —</option>
+  </select>
+</div>
+
+<!-- Stats bar -->
+<div class="stats-bar" id="statsBar" style="display:none">
+  <div class="stats-numbers">
+    <div class="stat">
+      <div class="stat-value" id="statCheckedIn">0</div>
+      <div class="stat-label">Checked In</div>
+    </div>
+    <div class="stat-divider"></div>
+    <div class="stat">
+      <div class="stat-value" id="statTotal">0</div>
+      <div class="stat-label">Registered</div>
+    </div>
+  </div>
+  <button class="walkin-btn" onclick="openWalkInModal()">+ Add Walk-In</button>
+</div>
+
+<!-- Search -->
+<div class="search-bar" id="searchBar" style="display:none">
+  <input type="text" class="search-input" id="searchInput" placeholder="Search by name…" oninput="renderRoster()">
+</div>
+
+<div class="main">
+  <div id="rosterContent">
+    <div class="state-msg">
+      <h3>Select an event to view the roster</h3>
+    </div>
+  </div>
+</div>
+
+<!-- Walk-in modal -->
+<div class="modal-overlay" id="walkinModal" onclick="handleModalOverlayClick(event)">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">Add Walk-In</div>
+      <button class="modal-close" onclick="closeWalkInModal()">✕</button>
+    </div>
+    <div class="form-row-2">
+      <div class="form-group">
+        <div class="field-label">First Name *</div>
+        <input type="text" class="std-input" id="wiFirst" autocomplete="given-name">
+      </div>
+      <div class="form-group">
+        <div class="field-label">Last Name *</div>
+        <input type="text" class="std-input" id="wiLast" autocomplete="family-name">
+      </div>
+    </div>
+    <div class="form-group">
+      <div class="field-label">Email *</div>
+      <input type="email" class="std-input" id="wiEmailModal" autocomplete="email" autocapitalize="off">
+    </div>
+    <div class="form-group">
+      <div class="field-label">Company</div>
+      <input type="text" class="std-input" id="wiCompanyModal" autocomplete="organization" placeholder="Optional">
+    </div>
+    <div class="modal-error" id="wiModalError"></div>
+    <button class="modal-submit" id="wiModalSubmit" onclick="submitWalkIn()">Check In Walk-In</button>
+  </div>
+</div>
+
+<script>
+  const API_BASE = '/api';
+
+  let allRegistrations = [];
+  let currentEventId   = null;
+  let currentEventName = '';
+
+  // ── Date picker: default to today ─────────────────────────
+  const today = new Date().toISOString().slice(0, 10);
+  const datePicker = document.getElementById('datePicker');
+  datePicker.value = today;
+  datePicker.addEventListener('change', loadEventsForDate);
+
+  // ── Load events for selected date ─────────────────────────
+  async function loadEventsForDate() {
+    const date  = datePicker.value || today;
+    const sel   = document.getElementById('eventSelect');
+    sel.innerHTML = '<option value="">Loading…</option>';
+    document.getElementById('statsBar').style.display   = 'none';
+    document.getElementById('searchBar').style.display  = 'none';
+    document.getElementById('rosterContent').innerHTML  =
+      '<div class="state-msg"><h3>Select an event to view the roster</h3></div>';
+    allRegistrations = [];
+    currentEventId   = null;
+
+    try {
+      const res  = await fetch(`${API_BASE}/checkin?date=${date}`);
+      const data = await res.json();
+      const events = data.events || [];
+
+      sel.innerHTML = '<option value="">— Select an event —</option>';
+      events.forEach(ev => {
+        const opt = document.createElement('option');
+        opt.value = ev.id;
+        opt.textContent = ev.name + (ev.start_display ? '  ·  ' + ev.start_display : '');
+        sel.appendChild(opt);
+      });
+
+      if (events.length === 0) {
+        sel.innerHTML = '<option value="">No events on this date</option>';
+      }
+    } catch (err) {
+      sel.innerHTML = '<option value="">Error loading events</option>';
+    }
+  }
+
+  document.getElementById('eventSelect').addEventListener('change', async function () {
+    const eventId = this.value;
+    if (!eventId) {
+      document.getElementById('statsBar').style.display   = 'none';
+      document.getElementById('searchBar').style.display  = 'none';
+      document.getElementById('rosterContent').innerHTML  =
+        '<div class="state-msg"><h3>Select an event to view the roster</h3></div>';
+      allRegistrations = [];
+      currentEventId   = null;
+      return;
+    }
+    currentEventId   = eventId;
+    currentEventName = this.options[this.selectedIndex].text.split('  ·  ')[0];
+    await loadRoster(eventId);
+  });
+
+  // ── Load roster ────────────────────────────────────────────
+  async function loadRoster(eventId) {
+    document.getElementById('statsBar').style.display   = 'none';
+    document.getElementById('searchBar').style.display  = 'none';
+    document.getElementById('rosterContent').innerHTML  =
+      '<div class="state-msg"><div class="spinner"></div><p>Loading roster…</p></div>';
+
+    try {
+      const res  = await fetch(`${API_BASE}/checkin?event_id=${encodeURIComponent(eventId)}`);
+      const data = await res.json();
+      allRegistrations = data.registrations || [];
+
+      document.getElementById('statsBar').style.display  = 'flex';
+      document.getElementById('searchBar').style.display = 'block';
+      document.getElementById('searchInput').value       = '';
+      updateStats();
+      renderRoster();
+    } catch (err) {
+      document.getElementById('rosterContent').innerHTML =
+        '<div class="state-msg"><h3>Error loading roster</h3><p>Please refresh the page.</p></div>';
+    }
+  }
+
+  function updateStats() {
+    const checkedIn = allRegistrations.filter(r => r.status === 'Attended').length;
+    document.getElementById('statCheckedIn').textContent = checkedIn;
+    document.getElementById('statTotal').textContent     = allRegistrations.length;
+  }
+
+  // ── Render roster ──────────────────────────────────────────
+  function renderRoster() {
+    const query   = (document.getElementById('searchInput').value || '').toLowerCase().trim();
+    const filtered = allRegistrations.filter(r =>
+      !query || r.name.toLowerCase().includes(query)
+    );
+
+    if (allRegistrations.length === 0) {
+      document.getElementById('rosterContent').innerHTML =
+        '<div class="state-msg"><h3>No registrations found</h3></div>';
+      return;
+    }
+
+    if (filtered.length === 0) {
+      document.getElementById('rosterContent').innerHTML =
+        '<div class="no-match">No registrations match "<strong>' + esc(query) + '</strong>"</div>';
+      return;
+    }
+
+    const pending  = filtered.filter(r => r.status !== 'Attended');
+    const attended = filtered.filter(r => r.status === 'Attended');
+
+    let html = '<div class="roster">';
+
+    if (pending.length > 0) {
+      html += `<div class="roster-section-label">Not Yet Checked In (${pending.length})</div>`;
+      html += pending.map(r => rowHtml(r)).join('');
+    }
+    if (attended.length > 0) {
+      html += `<div class="roster-section-label">Checked In (${attended.length})</div>`;
+      html += attended.map(r => rowHtml(r)).join('');
+    }
+
+    html += '</div>';
+    document.getElementById('rosterContent').innerHTML = html;
+  }
+
+  function rowHtml(r) {
+    const attended  = r.status === 'Attended';
+    const badgeClass = attended ? 'badge-attended' : (r.status === 'Registered' ? 'badge-registered' : 'badge-other');
+    const timeStr   = attended && r.check_in_time
+      ? 'Checked in ' + fmtTime(r.check_in_time)
+      : '';
+
+    return `
+      <div class="reg-row ${attended ? 'attended' : ''}" id="row-${r.reg_id}">
+        <div style="flex:1;min-width:0">
+          <div class="reg-name">${esc(r.name)}</div>
+          ${timeStr ? `<div class="reg-time">${esc(timeStr)}</div>` : ''}
+        </div>
+        <span class="status-badge ${badgeClass}">${esc(r.status)}</span>
+        <button class="checkin-btn"
+          ${attended ? 'disabled' : ''}
+          onclick="checkInByRegId('${r.reg_id}', this)">
+          ${attended ? 'Done' : 'Check In'}
+        </button>
+      </div>`;
+  }
+
+  // ── Staff direct check-in ──────────────────────────────────
+  async function checkInByRegId(regId, btn) {
+    btn.disabled    = true;
+    btn.textContent = '…';
+
+    try {
+      const res  = await fetch(`${API_BASE}/checkin`, {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ reg_id: regId }),
+      });
+      const data = await res.json();
+
+      if (data.status === 'SUCCESS' || data.status === 'ALREADY_CHECKED_IN') {
+        // Update in-memory record and re-render
+        const rec = allRegistrations.find(r => r.reg_id === regId);
+        if (rec) {
+          rec.status         = 'Attended';
+          rec.check_in_time  = new Date().toISOString();
+        }
+        updateStats();
+        renderRoster();
+      } else {
+        btn.disabled    = false;
+        btn.textContent = 'Check In';
+        alert('Check-in failed. Please try again.');
+      }
+    } catch (err) {
+      btn.disabled    = false;
+      btn.textContent = 'Check In';
+      alert('Check-in failed. Please try again.');
+    }
+  }
+
+  // ── Walk-in modal ──────────────────────────────────────────
+  function openWalkInModal() {
+    if (!currentEventId) { alert('Please select an event first.'); return; }
+    document.getElementById('wiFirst').value      = '';
+    document.getElementById('wiLast').value       = '';
+    document.getElementById('wiEmailModal').value = '';
+    document.getElementById('wiCompanyModal').value = '';
+    document.getElementById('wiModalError').style.display = 'none';
+    ['wiFirst','wiLast','wiEmailModal'].forEach(id => document.getElementById(id).classList.remove('error'));
+    const btn = document.getElementById('wiModalSubmit');
+    btn.disabled = false; btn.textContent = 'Check In Walk-In';
+    document.getElementById('walkinModal').classList.add('open');
+    setTimeout(() => document.getElementById('wiFirst').focus(), 100);
+  }
+
+  function closeWalkInModal() {
+    document.getElementById('walkinModal').classList.remove('open');
+  }
+
+  function handleModalOverlayClick(e) {
+    if (e.target === document.getElementById('walkinModal')) closeWalkInModal();
+  }
+
+  async function submitWalkIn() {
+    const first   = document.getElementById('wiFirst').value.trim();
+    const last    = document.getElementById('wiLast').value.trim();
+    const email   = document.getElementById('wiEmailModal').value.trim();
+    const company = document.getElementById('wiCompanyModal').value.trim();
+    const errEl   = document.getElementById('wiModalError');
+
+    errEl.style.display = 'none';
+    ['wiFirst','wiLast','wiEmailModal'].forEach(id => document.getElementById(id).classList.remove('error'));
+
+    let valid = true;
+    if (!first) { document.getElementById('wiFirst').classList.add('error'); valid = false; }
+    if (!last)  { document.getElementById('wiLast').classList.add('error');  valid = false; }
+    if (!email || !email.includes('@')) { document.getElementById('wiEmailModal').classList.add('error'); valid = false; }
+    if (!valid) {
+      errEl.textContent   = 'Please fill in all required fields.';
+      errEl.style.display = 'block';
+      return;
+    }
+
+    const btn = document.getElementById('wiModalSubmit');
+    btn.disabled    = true;
+    btn.textContent = 'Checking in…';
+
+    try {
+      const res  = await fetch(`${API_BASE}/checkin`, {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({
+          event_id:   currentEventId,
+          first_name: first,
+          last_name:  last,
+          email,
+          company,
+        }),
+      });
+      const data = await res.json();
+
+      if (data.status === 'SUCCESS' || data.status === 'ALREADY_CHECKED_IN') {
+        closeWalkInModal();
+        // Reload roster to reflect new walk-in
+        await loadRoster(currentEventId);
+      } else {
+        errEl.textContent   = 'Something went wrong. Please try again.';
+        errEl.style.display = 'block';
+        btn.disabled        = false;
+        btn.textContent     = 'Check In Walk-In';
+      }
+    } catch (err) {
+      errEl.textContent   = 'Something went wrong. Please try again.';
+      errEl.style.display = 'block';
+      btn.disabled        = false;
+      btn.textContent     = 'Check In Walk-In';
+    }
+  }
+
+  // ── Helpers ────────────────────────────────────────────────
+  function fmtTime(iso) {
+    try {
+      return new Date(iso).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+    } catch (_) { return ''; }
+  }
+
+  function esc(str) {
+    return String(str)
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+      .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+  }
+
+  // ── Init ───────────────────────────────────────────────────
+  loadEventsForDate();
+</script>
+</body>
+</html>
