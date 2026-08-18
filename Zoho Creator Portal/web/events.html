@@ -250,7 +250,8 @@
       document.getElementById('content').innerHTML = `
         <div class="state-error">
           <h3>Unable to load events</h3>
-          <p>Please try again later or contact <a href="mailto:events@josh.ai">events@josh.ai</a>.</p>
+          <p>Please try again or contact <a href="mailto:events@josh.ai">events@josh.ai</a>.</p>
+          <button onclick="loadEvents()" style="margin-top:16px;padding:10px 24px;background:#000;color:#fff;border:none;border-radius:6px;font-size:14px;font-weight:600;cursor:pointer;">Try Again</button>
         </div>`;
     }
   }

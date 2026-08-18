@@ -23,7 +23,13 @@ const CORS = {
   'Content-Type': 'application/json',
 };
 
+let cachedToken  = null;
+let tokenExpiry  = 0;
+
 async function getToken() {
+  const now = Date.now();
+  if (cachedToken && now < tokenExpiry) return cachedToken;
+
   const res = await fetch(`${ZOHO_ACCOUNTS}/oauth/v2/token`, {
     method:  'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -36,7 +42,10 @@ async function getToken() {
   });
   const d = await res.json();
   if (!d.access_token) throw new Error('Token refresh failed: ' + JSON.stringify(d));
-  return d.access_token;
+
+  cachedToken = d.access_token;
+  tokenExpiry = now + (55 * 60 * 1000); // cache for 55 min; Zoho tokens last 60
+  return cachedToken;
 }
 
 // Build display string from a Zoho Date field ("YYYY-MM-DD") plus a plain-text local time
