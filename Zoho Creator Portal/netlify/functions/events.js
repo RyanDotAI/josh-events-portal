@@ -84,6 +84,9 @@ function mapEvent(ev, full = false) {
     audience:        ev.Audience_Type     || '',
     timezone:        TZ_LABEL[ev.Event_Timezone] || '',
     seats_remaining: null,
+    region:          ev.Target_Region     || null,
+    rep_firm:        ev.Rep_Firm          || null,
+    external_url:    ev.External_Registration_URL || null,
   };
   if (full) {
     out.virtual_link = ev.Virtual_Meeting_Link || null;
@@ -135,7 +138,7 @@ exports.handler = async (event) => {
       'Start_Date', 'Start_Time_Local', 'End_Date', 'End_Time_Local',
       'Event_Location_Name', 'Event_Address_City', 'Event_Address_State_Province',
       'Registration_Close_Date', 'Event_Description', 'Capacity', 'Audience_Type',
-      'Event_Timezone',
+      'Event_Timezone', 'Target_Region', 'Rep_Firm', 'External_Registration_URL',
     ].join(',');
 
     const url = `${ZOHO_CRM}/crm/v6/Event_Master/search`
