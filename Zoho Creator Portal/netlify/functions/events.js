@@ -59,17 +59,24 @@ function formatEventDateTime(dateFld, localTimeFld) {
   return timePart ? `${dateStr} at ${timePart}` : dateStr;
 }
 
-// Fetch the count of active (non-cancelled) registrations for an event.
-async function fetchRegCount(eventId, token) {
+// Fetch all active registrations in one call and return a map of eventId → count.
+async function fetchAllRegCounts(token) {
   try {
-    const criteria = `((Event:equals:${eventId})AND(Status:not_equal:Cancelled))`;
+    const criteria = '(Status:not_equal:Cancelled)';
     const url = `${ZOHO_CRM}/crm/v6/Event_Registrations/search`
-      + `?criteria=${encodeURIComponent(criteria)}&per_page=200`;
-    const res = await fetch(url, { headers: { Authorization: `Zoho-oauthtoken ${token}` } });
-    const d   = await res.json();
-    return Array.isArray(d.data) ? d.data.length : 0;
+      + `?criteria=${encodeURIComponent(criteria)}&fields=Event,Status&per_page=200`;
+    const res  = await fetch(url, { headers: { Authorization: `Zoho-oauthtoken ${token}` } });
+    const d    = await res.json();
+    const counts = {};
+    if (Array.isArray(d.data)) {
+      d.data.forEach(reg => {
+        const eventId = reg.Event && reg.Event.id;
+        if (eventId) counts[eventId] = (counts[eventId] || 0) + 1;
+      });
+    }
+    return counts;
   } catch (_) {
-    return 0;
+    return {};
   }
 }
 
@@ -127,7 +134,8 @@ exports.handler = async (event) => {
       }
       const mapped = mapEvent(ev, true);
       if (mapped.capacity) {
-        const count = await fetchRegCount(eventId, token);
+        const regCounts = await fetchAllRegCounts(token);
+        const count     = regCounts[eventId] || 0;
         const remaining = mapped.capacity - count;
         mapped.seats_remaining = remaining > 0 ? remaining : 0;
       }
@@ -161,12 +169,13 @@ exports.handler = async (event) => {
 
     const mapped = records.map(ev => mapEvent(ev));
 
-    // Fetch registration counts in parallel for events with capacity set
+    // Single bulk fetch for all reg counts instead of one call per event
     const withCap = mapped.filter(m => m.capacity);
     if (withCap.length > 0) {
-      const counts = await Promise.all(withCap.map(m => fetchRegCount(m.id, token)));
-      withCap.forEach((m, i) => {
-        const remaining = m.capacity - counts[i];
+      const regCounts = await fetchAllRegCounts(token);
+      withCap.forEach(m => {
+        const count     = regCounts[m.id] || 0;
+        const remaining = m.capacity - count;
         m.seats_remaining = remaining > 0 ? remaining : 0;
       });
     }
