@@ -229,7 +229,11 @@ exports.handler = async (event) => {
       body:       JSON.stringify({ events: mapped }),
     };
   } catch (err) {
-    console.error('events function error:', err);
-    return { statusCode: 500, headers: CORS, body: JSON.stringify({ error: 'Internal error' }) };
+    console.error('events function error:', err.name, err.message, err.stack);
+    return {
+      statusCode: 500,
+      headers:    CORS,
+      body:       JSON.stringify({ error: err.message || 'Internal error' }),
+    };
   }
 };

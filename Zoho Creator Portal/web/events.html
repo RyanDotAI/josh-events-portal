@@ -239,7 +239,11 @@
       if (audience) qs.set('audience', audience);
 
       const res  = await fetch(`${API_BASE}/events?${qs}`);
-      if (!res.ok) throw new Error('API error ' + res.status);
+      if (!res.ok) {
+        const body = await res.text();
+        console.error('Events API error — status:', res.status, 'body:', body);
+        throw new Error(`API error ${res.status}: ${body}`);
+      }
       const data = await res.json();
       allEvents  = data.events || [];
 
@@ -247,10 +251,15 @@
       document.getElementById('filters').style.display = allEvents.length ? 'flex' : 'none';
       renderEvents();
     } catch (err) {
+      console.error('loadEvents failed:', err.message);
       document.getElementById('content').innerHTML = `
         <div class="state-error">
           <h3>Unable to load events</h3>
           <p>Please try again or contact <a href="mailto:events@josh.ai">events@josh.ai</a>.</p>
+          <details style="margin-top:12px;font-size:12px;color:#999;text-align:left">
+            <summary style="cursor:pointer">Error details</summary>
+            <pre style="margin-top:6px;white-space:pre-wrap;word-break:break-all">${err.message}</pre>
+          </details>
           <button onclick="loadEvents()" style="margin-top:16px;padding:10px 24px;background:#000;color:#fff;border:none;border-radius:6px;font-size:14px;font-weight:600;cursor:pointer;">Try Again</button>
         </div>`;
     }
