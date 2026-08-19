@@ -144,9 +144,9 @@ function mapEvent(ev, full = false) {
     audience:        ev.Audience_Type || '',
     timezone:        TZ_LABEL[ev.Event_Timezone] || '',
     seats_remaining: null,
-    region:          ev.Target_Region            ? ev.Target_Region.trim()            : null,
-    rep_firm:        ev.Rep_Firm                 ? ev.Rep_Firm.trim()                 : null,
-    external_url:    ev.External_Registration_URL ? ev.External_Registration_URL.trim() : null,
+    region:          ev.Target_Region             ? String(ev.Target_Region.name      || ev.Target_Region).trim()             || null : null,
+    rep_firm:        ev.Rep_Firm                  ? String(ev.Rep_Firm.name           || ev.Rep_Firm).trim()                  || null : null,
+    external_url:    ev.External_Registration_URL ? String(ev.External_Registration_URL.name || ev.External_Registration_URL).trim() || null : null,
   };
   if (full) {
     out.virtual_link = ev.Virtual_Meeting_Link || null;
