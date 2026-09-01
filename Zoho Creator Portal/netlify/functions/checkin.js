@@ -99,6 +99,14 @@ async function crmUpdate(module, id, data, token) {
 
 // ── Date helper ───────────────────────────────────────────────────────────────
 
+// Zoho's DateTime fields reject the ISO 8601 'Z' UTC designator and
+// fractional seconds — they require a numeric UTC offset instead
+// (e.g. +00:00). Plain toISOString() output fails validation with
+// INVALID_DATA for strict DateTime fields like Check_in_Time.
+function zohoNow() {
+  return new Date().toISOString().replace(/\.\d{3}Z$/, '+00:00');
+}
+
 function formatEventDisplay(dateFld, localTimeFld) {
   if (!dateFld) return '';
   const [y, m, d] = (dateFld || '').split('-');
@@ -183,7 +191,7 @@ async function getRoster(eventId, token) {
 async function markAttended(regId, token) {
   const result = await crmUpdate('Event_Registrations', regId, {
     Status:        'Attended',
-    Check_in_Time: new Date().toISOString(),
+    Check_in_Time: zohoNow(),
   }, token);
 
   if (!result || result.status !== 'success') {
@@ -319,7 +327,7 @@ async function doWalkIn(body, token) {
       const newId = newLead?.details?.id;
       if (!newId) {
         console.error('WALKIN — Lead creation failed:', JSON.stringify(newLead));
-        return { statusCode: 200, headers: CORS, body: JSON.stringify({ status: 'ERROR', debug: newLead }) };
+        return { statusCode: 200, headers: CORS, body: JSON.stringify({ status: 'ERROR' }) };
       }
       registrantType = 'lead';
       registrantId   = newId;
@@ -356,7 +364,7 @@ async function doWalkIn(body, token) {
     Name:                `${nameFromCRM} - ${evName}`,
     Event:               { id: event_id },
     Registration_Date:   new Date().toISOString(),
-    Check_in_Time:       new Date().toISOString(),
+    Check_in_Time:       zohoNow(),
     Status:              'Attended',
     Registration_Source: 'Walk-In',
   };
@@ -368,7 +376,7 @@ async function doWalkIn(body, token) {
 
   if (!newId) {
     console.error('WALKIN — registration creation failed:', JSON.stringify(newReg));
-    return { statusCode: 200, headers: CORS, body: JSON.stringify({ status: 'ERROR', debug: newReg }) };
+    return { statusCode: 200, headers: CORS, body: JSON.stringify({ status: 'ERROR' }) };
   }
 
   console.log('WALKIN — walk-in registered and checked in:', emailLower, 'reg_id:', newId);
@@ -387,7 +395,7 @@ exports.handler = async (event) => {
     // ── GET ──────────────────────────────────────────────────
     if (event.httpMethod === 'GET') {
       if (qs.event_id) {
-        return getRoster(qs.event_id, token);
+        return await getRoster(qs.event_id, token);
       }
       const dateStr = qs.date || new Date().toISOString().slice(0, 10);
       const events  = await getEventsForDate(dateStr, token);
@@ -400,15 +408,15 @@ exports.handler = async (event) => {
 
       // Walk-in: has name fields
       if (body.first_name || body.last_name) {
-        return doWalkIn(body, token);
+        return await doWalkIn(body, token);
       }
       // Staff direct check-in: only reg_id
       if (body.reg_id && !body.event_id) {
-        return doDirectCheckIn(body.reg_id, token);
+        return await doDirectCheckIn(body.reg_id, token);
       }
       // Attendee email check-in
       if (body.event_id && body.email) {
-        return doEmailCheckIn(body.event_id, body.email, token);
+        return await doEmailCheckIn(body.event_id, body.email, token);
       }
 
       return { statusCode: 400, headers: CORS, body: JSON.stringify({ error: 'Invalid request body' }) };
