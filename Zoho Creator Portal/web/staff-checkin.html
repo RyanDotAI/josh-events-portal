@@ -388,6 +388,13 @@
     try {
       const res  = await fetch(`${API_BASE}/checkin?date=${date}`);
       const data = await res.json();
+
+      if (!res.ok) {
+        console.error('checkin load error:', data.error || res.status);
+        sel.innerHTML = '<option value="">Error loading events</option>';
+        return;
+      }
+
       const events = data.events || [];
 
       sel.innerHTML = '<option value="">— Select an event —</option>';
@@ -402,6 +409,7 @@
         sel.innerHTML = '<option value="">No events on this date</option>';
       }
     } catch (err) {
+      console.error('checkin load error:', err);
       sel.innerHTML = '<option value="">Error loading events</option>';
     }
   }
@@ -432,6 +440,9 @@
     try {
       const res  = await fetch(`${API_BASE}/checkin?event_id=${encodeURIComponent(eventId)}`);
       const data = await res.json();
+
+      if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+
       allRegistrations = data.registrations || [];
 
       document.getElementById('statsBar').style.display  = 'flex';
@@ -440,6 +451,7 @@
       updateStats();
       renderRoster();
     } catch (err) {
+      console.error('roster load error:', err);
       document.getElementById('rosterContent').innerHTML =
         '<div class="state-msg"><h3>Error loading roster</h3><p>Please refresh the page.</p></div>';
     }

@@ -2,7 +2,8 @@
 // Required env vars: ZOHO_CLIENT_ID, ZOHO_CLIENT_SECRET, ZOHO_REFRESH_TOKEN
 // Optional env vars: ZOHO_ACCOUNTS_URL, ZOHO_CRM_URL (default to US data center)
 
-const ZOHO_ACCOUNTS    = process.env.ZOHO_ACCOUNTS_URL || 'https://accounts.zoho.com';
+const { getToken } = require('./lib/zoho-auth');
+
 const ZOHO_CRM         = process.env.ZOHO_CRM_URL      || 'https://www.zohoapis.com';
 const FETCH_TIMEOUT_MS = 7000; // fail fast before Netlify's 10s function limit
 
@@ -23,47 +24,6 @@ const CORS = {
   'Access-Control-Allow-Headers': 'Content-Type',
   'Content-Type': 'application/json',
 };
-
-// ── Token cache ───────────────────────────────────────────────────────────────
-// tokenInflight deduplicates concurrent refresh attempts within the same
-// Lambda instance so only one HTTP call goes out even under burst traffic.
-let cachedToken   = null;
-let tokenExpiry   = 0;
-let tokenInflight = null;
-
-async function getToken() {
-  const now = Date.now();
-  if (cachedToken && now < tokenExpiry) return cachedToken;
-  if (tokenInflight) return tokenInflight;
-
-  tokenInflight = (async () => {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
-    try {
-      const res = await fetch(`${ZOHO_ACCOUNTS}/oauth/v2/token`, {
-        method:  'POST',
-        signal:  controller.signal,
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body:    new URLSearchParams({
-          grant_type:    'refresh_token',
-          client_id:     process.env.ZOHO_CLIENT_ID,
-          client_secret: process.env.ZOHO_CLIENT_SECRET,
-          refresh_token: process.env.ZOHO_REFRESH_TOKEN,
-        }),
-      });
-      const d = await res.json();
-      if (!d.access_token) throw new Error('Token refresh failed: ' + JSON.stringify(d));
-      cachedToken = d.access_token;
-      tokenExpiry = Date.now() + (55 * 60 * 1000); // cache 55 min; tokens last 60
-      return cachedToken;
-    } finally {
-      clearTimeout(timer);
-      tokenInflight = null;
-    }
-  })();
-
-  return tokenInflight;
-}
 
 // ── Fetch wrapper: timeout + single retry on 429 ──────────────────────────────
 async function zohoFetch(url, options = {}) {
@@ -162,7 +122,7 @@ exports.handler = async (event) => {
   }
 
   try {
-    const token = await getToken();
+    const token = await getToken(event);
 
     // Detect single-event vs list: path is /api/events or /api/events/{id}
     const suffix  = event.path.replace(/^\/api\/events\/?/, '');

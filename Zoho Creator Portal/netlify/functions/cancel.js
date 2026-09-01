@@ -6,10 +6,10 @@
 // Optional env vars: ZOHO_ACCOUNTS_URL, ZOHO_CRM_URL, SITE_URL
 
 const nodemailer = require('nodemailer');
+const { getToken } = require('./lib/zoho-auth');
 
-const ZOHO_ACCOUNTS = process.env.ZOHO_ACCOUNTS_URL || 'https://accounts.zoho.com';
-const ZOHO_CRM      = process.env.ZOHO_CRM_URL      || 'https://www.zohoapis.com';
-const SITE_URL      = process.env.SITE_URL           || 'https://okjosh.netlify.app';
+const ZOHO_CRM = process.env.ZOHO_CRM_URL || 'https://www.zohoapis.com';
+const SITE_URL = process.env.SITE_URL     || 'https://okjosh.netlify.app';
 
 const CORS = {
   'Access-Control-Allow-Origin':  '*',
@@ -17,22 +17,6 @@ const CORS = {
   'Access-Control-Allow-Headers': 'Content-Type',
   'Content-Type': 'application/json',
 };
-
-async function getToken() {
-  const res = await fetch(`${ZOHO_ACCOUNTS}/oauth/v2/token`, {
-    method:  'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body:    new URLSearchParams({
-      grant_type:    'refresh_token',
-      client_id:     process.env.ZOHO_CLIENT_ID,
-      client_secret: process.env.ZOHO_CLIENT_SECRET,
-      refresh_token: process.env.ZOHO_REFRESH_TOKEN,
-    }),
-  });
-  const d = await res.json();
-  if (!d.access_token) throw new Error('Token refresh failed: ' + JSON.stringify(d));
-  return d.access_token;
-}
 
 async function safeJson(res) {
   if (res.status === 204) return { data: [] };
@@ -97,7 +81,7 @@ exports.handler = async (event) => {
   if (event.httpMethod === 'OPTIONS') return { statusCode: 200, headers: CORS, body: '' };
 
   try {
-    const token = await getToken();
+    const token = await getToken(event);
 
     // ── GET: return event name + status ───────────────────────
     if (event.httpMethod === 'GET') {

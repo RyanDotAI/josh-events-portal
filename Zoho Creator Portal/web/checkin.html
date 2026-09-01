@@ -311,6 +311,13 @@
   <p class="no-events-sub">There are no scheduled events for today.<br>Contact <a href="mailto:events@josh.ai" style="color:#000">events@josh.ai</a> if you need assistance.</p>
 </div>
 
+<!-- Load error (distinct from genuinely zero events) -->
+<div class="step" id="step-load-error">
+  <div class="no-events-icon">⚠️</div>
+  <div class="no-events-title">Couldn't Load Events</div>
+  <p class="no-events-sub">Something went wrong loading today's events.<br>Please refresh, or contact <a href="mailto:events@josh.ai" style="color:#000">events@josh.ai</a> if this keeps happening.</p>
+</div>
+
 <!-- Select event (only shown if multiple today) -->
 <div class="step" id="step-events">
   <div class="step-label">Check In</div>
@@ -405,6 +412,13 @@
     try {
       const res  = await fetch(`${API_BASE}/checkin`);
       const data = await res.json();
+
+      if (!res.ok) {
+        console.error('checkin load error:', data.error || res.status);
+        show('step-load-error');
+        return;
+      }
+
       todayEvents = data.events || [];
 
       if (todayEvents.length === 0) {
@@ -416,7 +430,8 @@
         show('step-events');
       }
     } catch (err) {
-      show('step-no-events');
+      console.error('checkin load error:', err);
+      show('step-load-error');
     }
   }
 

@@ -10,8 +10,10 @@
 // Required env: ZOHO_CLIENT_ID, ZOHO_CLIENT_SECRET, ZOHO_REFRESH_TOKEN
 // Optional env: ZOHO_ACCOUNTS_URL, ZOHO_CRM_URL
 
-const ZOHO_ACCOUNTS = process.env.ZOHO_ACCOUNTS_URL || 'https://accounts.zoho.com';
-const ZOHO_CRM      = process.env.ZOHO_CRM_URL      || 'https://www.zohoapis.com';
+const { getToken } = require('./lib/zoho-auth');
+
+const ZOHO_CRM         = process.env.ZOHO_CRM_URL      || 'https://www.zohoapis.com';
+const FETCH_TIMEOUT_MS = 7000; // fail fast before Netlify's 10s function limit
 
 const TZ_LABEL = {
   'Pacific Time (PT) - (US & Canada)':  'PT',
@@ -33,20 +35,24 @@ const CORS = {
 
 // ── Zoho helpers ──────────────────────────────────────────────────────────────
 
-async function getToken() {
-  const res = await fetch(`${ZOHO_ACCOUNTS}/oauth/v2/token`, {
-    method:  'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body:    new URLSearchParams({
-      grant_type:    'refresh_token',
-      client_id:     process.env.ZOHO_CLIENT_ID,
-      client_secret: process.env.ZOHO_CLIENT_SECRET,
-      refresh_token: process.env.ZOHO_REFRESH_TOKEN,
-    }),
-  });
-  const d = await res.json();
-  if (!d.access_token) throw new Error('Token refresh failed: ' + JSON.stringify(d));
-  return d.access_token;
+// ── Fetch wrapper: timeout + single retry on 429 ──────────────────────────────
+async function zohoFetch(url, options = {}) {
+  const attempt = async () => {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+    try {
+      return await fetch(url, { ...options, signal: controller.signal });
+    } finally {
+      clearTimeout(timer);
+    }
+  };
+
+  let res = await attempt();
+  if (res.status === 429) {
+    await new Promise(r => setTimeout(r, 1000));
+    res = await attempt();
+  }
+  return res;
 }
 
 async function safeJson(res) {
@@ -57,7 +63,7 @@ async function safeJson(res) {
 }
 
 async function crmGet(path, token) {
-  const res = await fetch(`${ZOHO_CRM}/crm/v6/${path}`, {
+  const res = await zohoFetch(`${ZOHO_CRM}/crm/v6/${path}`, {
     headers: { Authorization: `Zoho-oauthtoken ${token}` },
   });
   return safeJson(res);
@@ -72,7 +78,7 @@ async function crmSearch(module, criteria, token, perPage = 200) {
 }
 
 async function crmCreate(module, record, token) {
-  const res = await fetch(`${ZOHO_CRM}/crm/v6/${module}`, {
+  const res = await zohoFetch(`${ZOHO_CRM}/crm/v6/${module}`, {
     method:  'POST',
     headers: { Authorization: `Zoho-oauthtoken ${token}`, 'Content-Type': 'application/json' },
     body:    JSON.stringify({ data: [record] }),
@@ -82,7 +88,7 @@ async function crmCreate(module, record, token) {
 }
 
 async function crmUpdate(module, id, data, token) {
-  const res = await fetch(`${ZOHO_CRM}/crm/v6/${module}/${id}`, {
+  const res = await zohoFetch(`${ZOHO_CRM}/crm/v6/${module}/${id}`, {
     method:  'PUT',
     headers: { Authorization: `Zoho-oauthtoken ${token}`, 'Content-Type': 'application/json' },
     body:    JSON.stringify({ data: [data] }),
@@ -127,7 +133,7 @@ async function getEventsForDate(dateStr, token) {
     + `&fields=${encodeURIComponent(fields)}`
     + `&per_page=50`;
 
-  const res  = await fetch(url, { headers: { Authorization: `Zoho-oauthtoken ${token}` } });
+  const res  = await zohoFetch(url, { headers: { Authorization: `Zoho-oauthtoken ${token}` } });
   const raw  = await safeJson(res);
   const recs = raw.data || [];
 
@@ -375,7 +381,7 @@ exports.handler = async (event) => {
   if (event.httpMethod === 'OPTIONS') return { statusCode: 200, headers: CORS, body: '' };
 
   try {
-    const token = await getToken();
+    const token = await getToken(event);
     const qs    = event.queryStringParameters || {};
 
     // ── GET ──────────────────────────────────────────────────
@@ -411,7 +417,11 @@ exports.handler = async (event) => {
     return { statusCode: 405, headers: CORS, body: JSON.stringify({ error: 'Method not allowed' }) };
 
   } catch (err) {
-    console.error('checkin function error:', err.message);
-    return { statusCode: 500, headers: CORS, body: JSON.stringify({ error: 'Internal error' }) };
+    console.error('checkin function error:', err.name, err.message, err.stack);
+    return {
+      statusCode: 500,
+      headers:    CORS,
+      body:       JSON.stringify({ error: err.message || 'Internal error' }),
+    };
   }
 };
