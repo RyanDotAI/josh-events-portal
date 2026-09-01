@@ -319,7 +319,7 @@ async function doWalkIn(body, token) {
       const newId = newLead?.details?.id;
       if (!newId) {
         console.error('WALKIN — Lead creation failed:', JSON.stringify(newLead));
-        return { statusCode: 200, headers: CORS, body: JSON.stringify({ status: 'ERROR' }) };
+        return { statusCode: 200, headers: CORS, body: JSON.stringify({ status: 'ERROR', debug: newLead }) };
       }
       registrantType = 'lead';
       registrantId   = newId;
@@ -368,7 +368,7 @@ async function doWalkIn(body, token) {
 
   if (!newId) {
     console.error('WALKIN — registration creation failed:', JSON.stringify(newReg));
-    return { statusCode: 200, headers: CORS, body: JSON.stringify({ status: 'ERROR' }) };
+    return { statusCode: 200, headers: CORS, body: JSON.stringify({ status: 'ERROR', debug: newReg }) };
   }
 
   console.log('WALKIN — walk-in registered and checked in:', emailLower, 'reg_id:', newId);
